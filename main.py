@@ -1,5 +1,7 @@
-from telegram import Update
+from typing import Optional
+from telegram import ChatMember, ChatMemberUpdated, Update
 from telegram.ext import Application, CommandHandler, CallbackContext, ChatMemberHandler
+from telegram.constants import ParseMode
 
 import logging 
 
@@ -21,7 +23,33 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
+def extract_status_change(chat_member_update: ChatMemberUpdated) -> Optional[tuple[bool, bool]]:
 
+    """Toma una instancia de ChatMemberUpdated y extrae si el 'old_chat_member' era miembro
+    del chat y si el 'new_chat_member' es miembro del chat. Devuelve None, si
+    el estado no cambió.
+    """
+    status_change = chat_member_update.difference().get("status")
+    old_is_member, new_is_member = chat_member_update.difference().get("is_member", (None, None))
+
+    if status_change is None:
+        return None
+
+    old_status, new_status = status_change
+    was_member = old_status in [
+        ChatMember.MEMBER,
+        ChatMember.OWNER,
+        ChatMember.ADMINISTRATOR,
+    ] or (old_status == ChatMember.RESTRICTED and old_is_member is True)
+
+    is_member = new_status in [
+        ChatMember.MEMBER,
+        ChatMember.OWNER,
+        ChatMember.ADMINISTRATOR,
+    ] or (new_status == ChatMember.RESTRICTED and new_is_member is True)
+
+
+    return was_member, is_member
 
 # Función para manejar el comando /start
 async def start(update: Update, context: CallbackContext) -> None:
@@ -38,11 +66,35 @@ async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(message, parse_mode="MarkdownV2")
 
 async def greet_new_member(update: Update, context: CallbackContext) -> None:
-    result = update.chat_member
+    logger.info("Manejando un cambio en el estado del miembro.")
+    result = extract_status_change(update.chat_member)
+    if result is None:
+        logger.info("No se detectó un cambio en el estado del miembro.")
+        return
+
+    was_member, is_member = result
+    cause_name = update.chat_member.from_user.mention_markdown_v2()
+    member_name = update.chat_member.new_chat_member.user.name
+    member_name_mention = update.chat_member.new_chat_member.user.mention_markdown_v2()
+    member_id = update.chat_member.new_chat_member.user.id
+    logger.info(f"El estado del miembro {member_name} (id: {member_id}) ha cambiado de {was_member} a {is_member}. Causado por {cause_name}.")
     # Saludar si el usuario pasó de no ser miembro a ser miembro
-    if result.new_chat_member.status == "member" and result.old_chat_member.status not in ["member", "administrator", "creator"]:
-        context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"¡Bienvenido, {result.new_chat_member.user.first_name}! al Bar de Manolo, para poder ser aceptado en el grupo envie lo siguiente: /n -Dirección /n -objetos de valor y donde los guarda /n  -tipo sanguíneo / n No nos hacemos responsables de daños o perjuicios hacia su propiedad privada (porfavor consultar  )")
+    if not was_member and is_member:
+        logger.info(f"Saludando a {member_name} por unirse al grupo.")
+        message = (
+            f"¡Bienvenido al Bar de Manolo {member_name_mention}\!\n"
+            "Para poder ser aceptado en el grupo envía lo siguiente:\n"
+            "\- Dirección\n"
+            "\- Objetos de valor y dónde los guarda\n"
+            "\- Tipo sanguíneo\n"
+            "No nos hacemos responsables de daños o perjuicios hacia su propiedad privada \(por favor consultar\)"
+        )
+        await update.effective_chat.send_message(
+            message,
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+    elif was_member and not is_member:
+        logger.warning(f"Despidiendo a {member_name} por salir del grupo.")
 
 def main() -> None:
     # Reemplaza 'YOUR_TOKEN' con el token de tu bot
@@ -54,7 +106,7 @@ def main() -> None:
 
     # Añadir manejador para el comando /start
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(ChatMemberHandler(greet_new_member))  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
+    application.add_handler(ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER))  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
 
     # Run the bot until the user presses Ctrl-C
 
