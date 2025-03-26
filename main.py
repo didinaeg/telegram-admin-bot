@@ -3,11 +3,11 @@ from telegram import ChatMember, ChatMemberUpdated, Update
 from telegram.ext import Application, CommandHandler, CallbackContext, ChatMemberHandler
 from telegram.constants import ParseMode
 
-import logging 
+from messages import RULES_MESSAGE
 
+import logging 
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 
 # Enable logging
@@ -56,17 +56,14 @@ async def start(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     logger.info(f"El usuario {user.first_name} ha iniciado una conversación.")
     message = (
-        f"¡Bienvenido, [{user.first_name}](tg://user?id={user.id})\! al Bar de Manolo\n"
-        "Para poder ser aceptado en el grupo envía lo siguiente:\n"
-        "\- Dirección\n"
-        "\- Objetos de valor y dónde los guarda\n"
-        "\- Tipo sanguíneo\n"
-        "No nos hacemos responsables de daños o perjuicios hacia su propiedad privada \(por favor consultar\)"
+        f"Hola, [{user.first_name}](tg://user?id={user.id}) soy Manolito,\n"
+        "estoy aquí para ayudarte con la gestión de tu bar\n"
+        "\¿qué necitas\?"
+        
     )
     await update.message.reply_text(message, parse_mode="MarkdownV2")
 
 async def greet_new_member(update: Update, context: CallbackContext) -> None:
-    logger.info("Manejando un cambio en el estado del miembro.")
     result = extract_status_change(update.chat_member)
     if result is None:
         logger.info("No se detectó un cambio en el estado del miembro.")
@@ -87,7 +84,7 @@ async def greet_new_member(update: Update, context: CallbackContext) -> None:
             "\- Dirección\n"
             "\- Objetos de valor y dónde los guarda\n"
             "\- Tipo sanguíneo\n"
-            "No nos hacemos responsables de daños o perjuicios hacia su propiedad privada \(por favor consultar\)"
+            "No nos hacemos responsables de daños o perjuicios hacia su propiedad privada \(por favor consulta las /rules\)"
         )
         await update.effective_chat.send_message(
             message,
@@ -95,6 +92,10 @@ async def greet_new_member(update: Update, context: CallbackContext) -> None:
         )
     elif was_member and not is_member:
         logger.warning(f"Despidiendo a {member_name} por salir del grupo.")
+
+async def rules(update: Update, context: CallbackContext) -> None:
+    user = update.effective_user
+    await update.message.reply_text(RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2)
 
 def main() -> None:
     # Reemplaza 'YOUR_TOKEN' con el token de tu bot
@@ -106,6 +107,7 @@ def main() -> None:
 
     # Añadir manejador para el comando /start
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("rules", rules))
     application.add_handler(ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER))  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
 
     # Run the bot until the user presses Ctrl-C
