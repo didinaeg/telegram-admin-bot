@@ -208,26 +208,6 @@ async def download_video(context: ContextTypes.DEFAULT_TYPE, url: str, message: 
             await message.edit_text(f"Error durante la descarga: {str(e)}")
             active_downloads[user_id]['active'] = False
 
-# Función para manejar el timeout de la conversación
-async def conversation_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle conversation timeout"""
-    # Obtener el mensaje original de la conversación
-    user_id = context.user_id if hasattr(context, 'user_id') else None
-    
-    # Si hay información de usuario en el contexto del timeout
-    if user_id and user_id in active_downloads:
-        # Marcar la descarga como inactiva
-        active_downloads[user_id]['active'] = False
-        
-        # Intentar editar el mensaje si existe
-        if 'message' in active_downloads[user_id] and active_downloads[user_id]['message']:
-            try:
-                await active_downloads[user_id]['message'].edit_text("La operación de descarga fue cancelada por timeout.")
-            except Exception as e:
-                logger.error(f"Error al actualizar mensaje de timeout: {e}")
-    
-    return ConversationHandler.END
-
 def main() -> None:
     """Run the bot."""
     # Create the Application and pass it your bot's token.
@@ -249,7 +229,6 @@ def main() -> None:
         },
         fallbacks=[CallbackQueryHandler(stop_callback, pattern="^download_cancel$")],
         conversation_timeout=10,
-        conversation_timeout_handler=conversation_timeout,
         block=False,
         per_message=True,
         per_user=False,
