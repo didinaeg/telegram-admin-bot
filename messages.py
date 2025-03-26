@@ -1,3 +1,5 @@
+#type: ignore
+
 RULES_MESSAGE = """📜 *CONSTITUCIÓN DEL BAR DE MANOLO*
 
 *Preámbulo*  
