@@ -1,7 +1,8 @@
 from typing import Optional
 from telegram import ChatMember, ChatMemberUpdated, Update
-from telegram.ext import Application, CommandHandler, CallbackContext, ChatMemberHandler
+from telegram.ext import Application, CommandHandler, CallbackContext, ChatMemberHandler , MessageHandler, filters
 from telegram.constants import ParseMode
+from urllib.parse import urlparse
 
 from messages import RULES_MESSAGE
 from utils import extract_status_change
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 # Función para manejar el comando /start
-async def start(update: Update, context: CallbackContext) -> None:
+async def start_handler(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
 
     if user is None or update.message is None:
@@ -83,11 +84,41 @@ async def greet_new_member(update: Update, context: CallbackContext) -> None:
         logger.warning(f"Despidiendo a {member_name} por salir del grupo.")
 
 
-async def rules(update: Update, context: CallbackContext) -> None:
+async def rules_handler(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     if user is None or update.message is None:
         return
     await update.message.reply_text(RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2)
+
+async def all_messages_handler(update: Update, context: CallbackContext) -> None:
+    user = update.effective_user
+    if user is None or update.message is None:
+        return
+    message= update.message.text
+
+    if message is None:
+        return
+
+    # Comprobar si el mensaje contiene un enlace.
+    try:
+        url = urlparse(message)
+        # Check if the url a youtube link
+        youtube_domains = ["www.youtube.com", "youtube.com", "youtu.be"]
+        if url.hostname in youtube_domains:
+            logger.info(f"El usuario {user.first_name} ha enviado un enlace de YouTube.")
+            await update.message.reply_text("No se pueden enviar enlaces de YouTube en este grupo.")
+
+        instagram_domains = ["www.instagram.com", "instagram.com"]
+        if url.hostname in instagram_domains:
+            logger.info(f"El usuario {user.first_name} ha enviado un enlace de Instagram.")
+            await update.message.reply_text("No se pueden enviar enlaces de Instagram en este grupo.")
+
+        tiktok_domains = ["www.tiktok.com", "tiktok.com"]
+        if url.hostname in tiktok_domains:
+            logger.info(f"El usuario {user.first_name} ha enviado un enlace de TikTok.")
+            await update.message.reply_text("No se pueden enviar enlaces de TikTok en este grupo.")
+    except:
+        pass
 
 
 def main() -> None:
@@ -102,12 +133,12 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     # Añadir manejador para el comando /start
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("rules", rules))
+    application.add_handler(CommandHandler("start", start_handler))
+    application.add_handler(CommandHandler("rules", rules_handler))
     application.add_handler(
         ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER)
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
-
+    application.add_handler(MessageHandler(filters.ALL, all_messages_handler))
     # Run the bot until the user presses Ctrl-C
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
