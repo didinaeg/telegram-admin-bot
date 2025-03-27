@@ -22,11 +22,19 @@ active_downloads = {}
 async def download_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start download conversation from callback"""
     query = update.callback_query
-    
+    if not query:
+        return ConversationHandler.END
     await query.answer()
     
     # Extraer la URL del callback_data
+    if not query.data or ':' not in query.data:
+        await query.edit_message_text("No se proporcionó una URL válida.")
+        return ConversationHandler.END
     url = query.data.split(':', 1)[1]
+    
+    if not update.effective_user:
+        await query.edit_message_text("No se pudo identificar al usuario.")
+        return ConversationHandler.END
     user_id = update.effective_user.id
     
     # Verificar si hay una descarga activa para este usuario y cancelarla
@@ -38,6 +46,8 @@ async def download_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             except Exception:
                 pass
     # Guardar URL en contexto
+    if not context.user_data:
+        context.user_data = {}
     context.user_data['download_url'] = url
     
     # Inicializar o actualizar el registro de descargas para este usuario
@@ -65,8 +75,13 @@ async def download_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """End conversation from callback query"""
     query = update.callback_query
+    if not query:
+        return ConversationHandler.END
     await query.answer()
     
+    if not update.effective_user:   
+        await query.edit_message_text("No se pudo identificar al usuario.")
+        return ConversationHandler.END
     user_id = update.effective_user.id
     
     # Verificar si hay una descarga activa y cancelarla
@@ -104,9 +119,15 @@ async def download_yes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if not query:
         return ConversationHandler.END
     await query.answer()
-    
+    if not update.effective_user:
+        await query.edit_message_text("No se pudo identificar al usuario.")
+        return ConversationHandler.END
     user_id = update.effective_user.id
-    url = context.user_data.get('download_url')
+    # Verificar si user_data existe y si contiene la URL
+    if not context.user_data or 'download_url' not in context.user_data:
+        await query.edit_message_text("No se encontró la URL para descargar.")
+        return ConversationHandler.END
+    url = context.user_data['download_url']
     message = await query.edit_message_text(f"Iniciando la descarga de: {url}\nProgreso: 0%")
     
     # Marcar esta descarga como activa
@@ -114,8 +135,8 @@ async def download_yes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         active_downloads[user_id]['active'] = True
         active_downloads[user_id]['message'] = message
     
-    # Iniciar la descarga con simulación de progreso
-    await download_video(context, url, message, user_id)
+    # Iniciar la descarga con simulación de progreso   
+    await download_video(context, url, message, user_id) # type: ignore
     
     return ConversationHandler.END
 
@@ -126,7 +147,9 @@ async def download_no(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return ConversationHandler.END
 
     await query.answer()
-    
+    if not update.effective_user:   
+        await query.edit_message_text("No se pudo identificar al usuario.")
+        return ConversationHandler.END
     user_id = update.effective_user.id
     
     # Eliminar la descarga pendiente
