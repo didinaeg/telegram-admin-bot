@@ -1,13 +1,18 @@
-
 # Variable para almacenar las descargas activas por usuario
 import asyncio
+import os
+import tempfile
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
 )
-
+from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 from estados import DOWNLOAD_CHOOSING
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 active_downloads = {}
@@ -16,6 +21,7 @@ active_downloads = {}
 async def download_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start download conversation from callback"""
     query = update.callback_query
+    
     await query.answer()
     
     # Extraer la URL del callback_data
@@ -132,29 +138,115 @@ async def download_no(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 async def download_video(context: ContextTypes.DEFAULT_TYPE, url: str, message: Message, user_id: int) -> None:
-    """Simulate downloading the video and update progress"""
+    """Download the video using yt_dlp and send it to the user"""
     try:
-        # Simulamos la descarga con porcentajes
-        for progress in range(0, 101, 10):
-            # Verificar si la descarga fue cancelada
-            if user_id not in active_downloads or not active_downloads[user_id]['active']:
-                return
+        # Crear un directorio temporal para guardar el video
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Configurar opciones de descarga
+            ydl_opts = {
+                'format': 'best[height<=720]',  # Limitar la calidad a 720p para que no sea muy grande
+                'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+                'progress_hooks': [],  # Lo configuraremos más abajo
+                'noplaylist': True,    # Solo descargar el video, no la playlist
+            }
+            
+            # Variable para almacenar la información del video y la ruta del archivo
+            video_info = {'title': None, 'duration': None}
+            video_path = None
+            last_percent = 0
+            
+            # Hook para mostrar el progreso
+            def progress_hook(progress):
+                nonlocal last_percent
+                nonlocal video_info
+                nonlocal video_path
+                if progress['status'] == 'downloading':
+                    # Extraer el porcentaje de la descarga
+                    if '_percent_str' in progress:
+                        percent_str = progress['_percent_str'].strip()
+                        if percent_str.endswith('%'):
+                            try:
+                                percent = int(float(percent_str[:-1]))
+                                # Solo actualizar si el porcentaje cambió significativamente
+                                if percent >= last_percent + 10 or percent == 100:
+                                    last_percent = percent
+                                    logger.info(f"[{percent}%] {video_info['title']}")
+                                    asyncio.create_task(
+                                        message.edit_text(
+                                            f"Descargando: {video_info['title']}\n"
+                                            f"Duración: {video_info['duration']} segundos\n"
+                                            f"Progreso: {percent}%"
+                                        )
+                                    )
+                            except ValueError:
+                                pass
+                elif progress['status'] == 'finished':
+                    video_path = progress['filename']
+                    logger.info(f"Descarga completada at: {video_path}")
+                    asyncio.create_task(
+                        message.edit_text(
+                            f"Descarga completada: {video_info['title']}\n"
+                            f"Preparando para enviar..."
+                        )
+                    )
+            
+            # Agregar el hook a las opciones
+            ydl_opts['progress_hooks'].append(progress_hook)
+            
+            # Primero, extraer información sin descargar
+            with YoutubeDL(ydl_opts) as ydl:
+                # Verificar si la descarga fue cancelada
+                if user_id not in active_downloads or not active_downloads[user_id]['active']:
+                    return
+                    
+                # Obtener información del video
+                info = ydl.extract_info(url, download=False)
+                if not info:
+                    await message.edit_text(f"No se pudo obtener información del video: {url}")
+                    active_downloads[user_id]['active'] = False
+                    return
                 
-            await message.edit_text(f"Descargando: {url}\nProgreso: {progress}%")
-            await asyncio.sleep(1)  # Simular tiempo de descarga
-        
-        # Una vez completada la descarga, enviamos el video
-        # En un caso real, aquí enviaríamos el archivo descargado
-        if user_id in active_downloads and active_downloads[user_id]['active']:
-            await message.delete()
-            await context.bot.send_message(
-                chat_id=message.chat_id,
-                text="¡Video descargado exitosamente! En una implementación real, aquí enviaríamos el archivo de video."
-            )
-            # Marcar la descarga como completa
-            active_downloads[user_id]['active'] = False
+                video_info['title'] = info.get('title', 'Video desconocido')
+                video_info['duration'] = info.get('duration', 'desconocida')
+                
+                await message.edit_text(
+                    f"Descargando: {video_info['title']}\n"
+                    f"Duración: {video_info['duration']} segundos\n"
+                    f"Progreso: 0%"
+                )
+                logger.info(f"Descargando: {video_info['title']} ({video_info['duration']} segundos)")
+
+                # Verificar si la descarga fue cancelada
+                if user_id not in active_downloads or not active_downloads[user_id]['active']:
+                    return
+                
+                ydl.download([url])
+                logger.info(f"Descarga completada: {video_info['title']}")
+            
+            # Verificar si tenemos la ruta y si la descarga no fue cancelada
+            if video_path and os.path.exists(video_path) and user_id in active_downloads and active_downloads[user_id]['active']:
+                # Enviar el video
+                logger.info(f"Enviando video: {video_info['title']}")
+                await message.edit_text(f"Enviando video: {video_info['title']}")
+                await context.bot.send_document(
+                    chat_id=message.chat_id, 
+                    document=open(video_path, 'rb'),
+                    caption=f"Título: {video_info['title']}"
+                )
+                # Eliminar el mensaje de progreso
+                await message.delete()
+                # Marcar la descarga como completa
+                active_downloads[user_id]['active'] = False
+
+
     
+    except DownloadError as e:
+        if user_id in active_downloads and active_downloads[user_id]['active']:
+            logger.error(f"Error al descargar el video: {str(e)}")
+            await message.edit_text(f"Error al descargar el video: {str(e)}")
+            active_downloads[user_id]['active'] = False
     except Exception as e:
         if user_id in active_downloads and active_downloads[user_id]['active']:
+            logger.error(f"Error durante la descarga: {str(e)}")
             await message.edit_text(f"Error durante la descarga: {str(e)}")
             active_downloads[user_id]['active'] = False

@@ -211,7 +211,7 @@ async def download_video(context: ContextTypes.DEFAULT_TYPE, url: str, message: 
 def main() -> None:
     """Run the bot."""
     # Create the Application and pass it your bot's token.
-    application = Application.builder().token("7512065541:AAEnfNlaSNSGi1rs9M0xn_65vsGBYmZHTCE").build()
+    application = Application.builder().token("TOKEN").build()
 
     # Handler para el comando inicial
     application.add_handler(CommandHandler("download", download_command_initial))
