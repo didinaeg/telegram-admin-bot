@@ -1,9 +1,29 @@
 from typing import Optional
-from telegram import ChatMember, ChatMemberUpdated, Update
-from telegram.ext import Application, CommandHandler, CallbackContext, ChatMemberHandler , MessageHandler, filters
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ChatMember,
+    ChatMemberUpdated,
+    Update,
+    Message,
+)
 from telegram.constants import ParseMode
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    CallbackContext,
+    ChatMemberHandler,
+    filters,
+)
+
 from urllib.parse import urlparse
 
+from conversations.video_download import download_no, download_start, download_yes, stop_callback
+from estados import DOWNLOAD_CHOOSING, DOWNLOADING
 from messages import RULES_MESSAGE
 from utils import extract_status_change
 
@@ -90,11 +110,12 @@ async def rules_handler(update: Update, context: CallbackContext) -> None:
         return
     await update.message.reply_text(RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2)
 
-async def all_messages_handler(update: Update, context: CallbackContext) -> None:
+
+async def all_messages_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user is None or update.message is None:
         return
-    message= update.message.text
+    message = update.message.text
 
     if message is None:
         return
@@ -102,24 +123,44 @@ async def all_messages_handler(update: Update, context: CallbackContext) -> None
     # Comprobar si el mensaje contiene un enlace.
     try:
         url = urlparse(message)
+        url_link = url.geturl()
         # Check if the url a youtube link
         youtube_domains = ["www.youtube.com", "youtube.com", "youtu.be"]
         if url.hostname in youtube_domains:
-            logger.info(f"El usuario {user.first_name} ha enviado un enlace de YouTube.")
-            await update.message.reply_text("No se pueden enviar enlaces de YouTube en este grupo.")
+            logger.info(
+                f"El usuario {user.first_name} ha enviado un enlace de YouTube."
+            )
+            buttons = [
+                [
+                    InlineKeyboardButton(
+                        text="Iniciar descarga", callback_data=f"start_download:{url_link}"
+                    )
+                ],
+            ]
+            keyboard = InlineKeyboardMarkup(buttons)
+
+            await update.message.reply_text(
+                f"Haz clic en el botón para iniciar el proceso de descarga para:\n{url_link}",
+                reply_markup=keyboard,
+            )
 
         instagram_domains = ["www.instagram.com", "instagram.com"]
         if url.hostname in instagram_domains:
-            logger.info(f"El usuario {user.first_name} ha enviado un enlace de Instagram.")
-            await update.message.reply_text("No se pueden enviar enlaces de Instagram en este grupo.")
+            logger.info(
+                f"El usuario {user.first_name} ha enviado un enlace de Instagram."
+            )
+            await update.message.reply_text(
+                "No se pueden enviar enlaces de Instagram en este grupo."
+            )
 
         tiktok_domains = ["www.tiktok.com", "tiktok.com"]
         if url.hostname in tiktok_domains:
             logger.info(f"El usuario {user.first_name} ha enviado un enlace de TikTok.")
-            await update.message.reply_text("No se pueden enviar enlaces de TikTok en este grupo.")
+            await update.message.reply_text(
+                "No se pueden enviar enlaces de TikTok en este grupo."
+            )
     except:
         pass
-
 
 def main() -> None:
     # Reemplaza 'YOUR_TOKEN' con el token de tu bot
@@ -140,6 +181,26 @@ def main() -> None:
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
     application.add_handler(MessageHandler(filters.ALL, all_messages_handler))
     # Run the bot until the user presses Ctrl-C
+
+    # Conversación para descarga de videos (ahora todos son CallbackQueryHandler)
+    download_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(download_start, pattern="^start_download:")],
+        states={
+            DOWNLOAD_CHOOSING: [
+                CallbackQueryHandler(download_yes, pattern="^download_yes$"),
+                CallbackQueryHandler(download_no, pattern="^download_no$"),
+            ],
+            DOWNLOADING: [],  # Este estado sólo espera que termine la descarga
+        },
+        fallbacks=[CallbackQueryHandler(stop_callback, pattern="^download_cancel$")],
+        conversation_timeout=60*10,
+        block=False,
+        per_message=True,
+        per_user=False,
+        per_chat=True,
+    )
+
+    application.add_handler(download_conv)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
