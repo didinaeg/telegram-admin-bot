@@ -11,6 +11,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 from estados import DOWNLOAD_CHOOSING
 import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,6 @@ async def download_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await active_downloads[user_id]['message'].edit_text("Descarga cancelada: se solicitó una nueva descarga.")
             except Exception:
                 pass
-    
     # Guardar URL en contexto
     context.user_data['download_url'] = url
     
@@ -228,11 +228,14 @@ async def download_video(context: ContextTypes.DEFAULT_TYPE, url: str, message: 
                 # Enviar el video
                 logger.info(f"Enviando video: {video_info['title']}")
                 await message.edit_text(f"Enviando video: {video_info['title']}")
-                await context.bot.send_document(
-                    chat_id=message.chat_id, 
-                    document=open(video_path, 'rb'),
-                    caption=f"Título: {video_info['title']}"
-                )
+                
+                # Usar with para asegurar que el archivo se cierre correctamente
+                with open(video_path, 'rb') as video_file:
+                    await context.bot.send_document(
+                        chat_id=message.chat_id, 
+                        document=video_file,
+                        caption=f"Título: {video_info['title']}"
+                    )
                 # Eliminar el mensaje de progreso
                 await message.delete()
                 # Marcar la descarga como completa
@@ -246,6 +249,7 @@ async def download_video(context: ContextTypes.DEFAULT_TYPE, url: str, message: 
             await message.edit_text(f"Error al descargar el video: {str(e)}")
             active_downloads[user_id]['active'] = False
     except Exception as e:
+        traceback.print_exc()
         if user_id in active_downloads and active_downloads[user_id]['active']:
             logger.error(f"Error durante la descarga: {str(e)}")
             await message.edit_text(f"Error durante la descarga: {str(e)}")

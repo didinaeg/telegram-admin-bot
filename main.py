@@ -10,6 +10,7 @@ from telegram import (
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
+    PicklePersistence,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
@@ -171,7 +172,9 @@ def main() -> None:
         )
         return
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    persistence_helper = PicklePersistence(filepath="persistence.pkl")
+
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).persistence(persistence=persistence_helper).build()
 
     # Añadir manejador para el comando /start
     application.add_handler(CommandHandler("start", start_handler))
