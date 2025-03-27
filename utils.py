@@ -2,6 +2,21 @@ from typing import Optional
 
 from telegram import ChatMember, ChatMemberUpdated
 
+from functools import wraps
+
+LIST_OF_ADMINS = [906631113]
+
+def restricted(func):
+    @wraps(func)
+    async def wrapped(update, context, *args, **kwargs):
+        user_id = update.effective_user.id
+        if user_id not in LIST_OF_ADMINS:
+            print(f"Unauthorized access denied for {user_id}.")
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapped
+
+
 
 def extract_status_change(
     chat_member_update: ChatMemberUpdated,

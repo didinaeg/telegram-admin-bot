@@ -23,14 +23,20 @@ from telegram.ext import (
 
 from urllib.parse import urlparse
 
-from conversations.video_download import download_no, download_start, download_yes, stop_callback
+from conversations.video_download import (
+    download_no,
+    download_start,
+    download_yes,
+    stop_callback,
+)
 from estados import DOWNLOAD_CHOOSING, DOWNLOADING
-from messages import RULES_MESSAGE
-from utils import extract_status_change
+from messages import RULES_MESSAGE, MENSAJES_INTERVALOS
+from utils import extract_status_change, restricted
 
 import logging
 import os
 from dotenv import load_dotenv
+import random
 
 load_dotenv()
 
@@ -46,7 +52,6 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 logger = logging.getLogger(__name__)
-
 
 
 # Función para manejar el comando /start
@@ -112,10 +117,14 @@ async def rules_handler(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2)
 
 
-async def all_messages_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def all_messages_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     user = update.effective_user
     if user is None or update.message is None:
         return
+    
+    print(f"El usuario {user.first_name} (id: {user.id}) ha enviado un mensaje.")
     message = update.message.text
 
     if message is None:
@@ -134,7 +143,8 @@ async def all_messages_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             buttons = [
                 [
                     InlineKeyboardButton(
-                        text="Iniciar descarga", callback_data=f"start_download:{url_link}"
+                        text="Iniciar descarga",
+                        callback_data=f"start_download:{url_link}",
                     )
                 ],
             ]
@@ -163,41 +173,55 @@ async def all_messages_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except:
         pass
 
+
 async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envía un mensaje automático usando el chat_id almacenado en job.data"""
+    if context.job is None or context.job.chat_id is None:
+        return
     chat_id = context.job.chat_id  # En v20+ se usa job.data en lugar de context
-    await context.bot.send_message(chat_id=chat_id, text='Perro Sanxe dimisión')
+    # Enviar mensaje aleatorio de la lista MENSAJES_INTERVALOS
+    mensaje = random.choice(MENSAJES_INTERVALOS).replace(".", "\.").replace("-", "\-").replace("(", "\(").replace(")", "\)").replace("_", "\_").replace("[", "\[").replace("]", "\]").replace("!", "\!")
+    await context.bot.send_message(chat_id=chat_id, text=MENSAJES_INTERVALOS[0])
 
-
-async def start_auto_messaging(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+@restricted
+async def start_auto_messaging(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Inicia el envío de mensajes automáticos"""
     logger.info("Iniciando mensajes automáticos")
-    if update.effective_chat is None or update.effective_message is None:
+    if update.effective_chat is None or update.effective_message is None or context.job_queue is None:
         return
     chat_id = update.effective_message.chat.id
-    context.job_queue.run_repeating(callback_auto_message, 10, chat_id=chat_id, name=str(chat_id))
+    intervalo = 60 * 60 * 13
+    # check if the user is an admin
+    context.job_queue.run_repeating(
+        callback_auto_message, intervalo, chat_id=chat_id, name=str(chat_id)
+    )
     logger.info(f"Job creado para enviar mensajes automáticos a {chat_id}")
     # Alternativas comentadas:
     # context.job_queue.run_once(callback_auto_message, 3600, data=chat_id)
     # context.job_queue.run_daily(callback_auto_message, time=datetime.time(hour=9, minute=22), days=(0, 1, 2, 3, 4, 5, 6), data=chat_id)
-    
-    await update.effective_message.reply_text('¡Mensajes automáticos iniciados!')
-  
+
+    await update.effective_message.reply_text("¡Mensajes automáticos iniciados!")
+
 
 async def stop_notify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Detiene el envío de mensajes automáticos"""
     if update.effective_chat is None or update.message is None:
         return
-    
+
     chat_id = update.effective_chat.id
+    if context.job_queue is None:
+        return
     jobs = context.job_queue.get_jobs_by_name(str(chat_id))
-    
+
     if jobs:
         for job in jobs:
             job.schedule_removal()
-        await update.message.reply_text('¡Mensajes automáticos detenidos!')
+        await update.message.reply_text("¡Mensajes automáticos detenidos!")
     else:
-        await update.message.reply_text('No hay mensajes automáticos activos.')
+        await update.message.reply_text("No hay mensajes automáticos activos.")
+
 
 def main() -> None:
     # Reemplaza 'YOUR_TOKEN' con el token de tu bot
@@ -210,7 +234,12 @@ def main() -> None:
 
     persistence_helper = PicklePersistence(filepath="persistence.pkl")
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).persistence(persistence=persistence_helper).build()
+    application = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .persistence(persistence=persistence_helper)
+        .build()
+    )
 
     # Añadir manejador para el comando /start
     application.add_handler(CommandHandler("start", start_handler))
@@ -218,7 +247,7 @@ def main() -> None:
     application.add_handler(
         ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER)
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
-    
+
     # Run the bot until the user presses Ctrl-C
     application.add_handler(CommandHandler("auto", start_auto_messaging))
     application.add_handler(CommandHandler("stop", stop_notify))
@@ -234,7 +263,7 @@ def main() -> None:
             DOWNLOADING: [],  # Este estado sólo espera que termine la descarga
         },
         fallbacks=[CallbackQueryHandler(stop_callback, pattern="^download_cancel$")],
-        conversation_timeout=60*10,
+        conversation_timeout=60 * 10,
         block=False,
         per_message=True,
         per_user=False,

@@ -63,3 +63,10 @@ Todo lo no previsto en esta Constitución será resuelto por la Administración 
 *Artículo 10.*  
 El ingreso y permanencia en este grupo implica la aceptación total de esta Constitución.
 """.replace(".", "\.").replace("-", "\-").replace("(", "\(").replace(")", "\)").replace("_", "\_").replace("[", "\[").replace("]", "\]").replace("!", "\!")
+
+
+MENSAJES_INTERVALOS =[
+    "¡Perro Sanxe dimisión!",
+    "¡Estírate un poco para evitar lesiones!",
+    "¡Bocata lomo ya!"
+]
