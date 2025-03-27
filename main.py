@@ -163,6 +163,42 @@ async def all_messages_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except:
         pass
 
+async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Envía un mensaje automático usando el chat_id almacenado en job.data"""
+    chat_id = context.job.chat_id  # En v20+ se usa job.data en lugar de context
+    await context.bot.send_message(chat_id=chat_id, text='Perro Sanxe dimisión')
+
+
+async def start_auto_messaging(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Inicia el envío de mensajes automáticos"""
+    logger.info("Iniciando mensajes automáticos")
+    if update.effective_chat is None or update.effective_message is None:
+        return
+    chat_id = update.effective_message.chat.id
+    context.job_queue.run_repeating(callback_auto_message, 10, chat_id=chat_id, name=str(chat_id))
+    logger.info(f"Job creado para enviar mensajes automáticos a {chat_id}")
+    # Alternativas comentadas:
+    # context.job_queue.run_once(callback_auto_message, 3600, data=chat_id)
+    # context.job_queue.run_daily(callback_auto_message, time=datetime.time(hour=9, minute=22), days=(0, 1, 2, 3, 4, 5, 6), data=chat_id)
+    
+    await update.effective_message.reply_text('¡Mensajes automáticos iniciados!')
+  
+
+async def stop_notify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Detiene el envío de mensajes automáticos"""
+    if update.effective_chat is None or update.message is None:
+        return
+    
+    chat_id = update.effective_chat.id
+    jobs = context.job_queue.get_jobs_by_name(str(chat_id))
+    
+    if jobs:
+        for job in jobs:
+            job.schedule_removal()
+        await update.message.reply_text('¡Mensajes automáticos detenidos!')
+    else:
+        await update.message.reply_text('No hay mensajes automáticos activos.')
+
 def main() -> None:
     # Reemplaza 'YOUR_TOKEN' con el token de tu bot
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -182,10 +218,12 @@ def main() -> None:
     application.add_handler(
         ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER)
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
-    application.add_handler(MessageHandler(filters.ALL, all_messages_handler))
+    
     # Run the bot until the user presses Ctrl-C
-
+    application.add_handler(CommandHandler("auto", start_auto_messaging))
+    application.add_handler(CommandHandler("stop", stop_notify))
     # Conversación para descarga de videos (ahora todos son CallbackQueryHandler)
+    application.add_handler(MessageHandler(filters.ALL, all_messages_handler))
     download_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(download_start, pattern="^start_download:")],
         states={
