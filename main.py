@@ -1,3 +1,4 @@
+import threading
 from typing import Optional
 import instaloader
 import tempfile
@@ -26,8 +27,7 @@ from telegram.ext import (
 )
 
 from urllib.parse import urlparse
-import concurrent.futures
-import http.server
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from conversations.video_download import (
     download_no,
     download_start,
@@ -46,28 +46,23 @@ import random
 load_dotenv()
 
 # Enable logging
-
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
 # set higher logging level for httpx to avoid all GET and POST requests being logged
-
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 logger = logging.getLogger(__name__)
 
-def run_http_server():
-    port = 8080
-    server_address = ('', port)
-    httpd = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
-    httpd.serve_forever()
 
-def run_parallel_http_server():
-    executor = concurrent.futures.ThreadPoolExecutor()
-    executor.submit(run_http_server)
-    executor.shutdown(wait=False)
+class MyServer(threading.Thread):
+    def run(self):
+        self.server = ThreadingHTTPServer(('localhost', 8080), SimpleHTTPRequestHandler)
+        self.server.serve_forever()
+    def stop(self):
+        self.server.shutdown()
 
 
 # Función para manejar el comando /start
@@ -335,7 +330,9 @@ async def download_instagram_post(url: str) -> list[tuple[str, bytes, str]]:
 
 
 def main() -> None:
-    run_parallel_http_server()
+    # run_parallel_http_server()
+    s = MyServer()
+    s.start()
 
     # Reemplaza 'YOUR_TOKEN' con el token de tu bot
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -384,9 +381,13 @@ def main() -> None:
     )
 
     application.add_handler(download_conv)
-
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-
+    try:
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except KeyboardInterrupt:
+        logger.info("Deteniendo el bot...")
+    finally:
+        logger.info("Servidor HTTP cerrado.")
+        s.stop()
+        s.join()
 if __name__ == "__main__":
     main()
