@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 
 LIST_OF_ADMINS = [906631113]
 
+def isAdmin(id):
+    """Check if the user is an admin."""
+    return id in LIST_OF_ADMINS
+
+
 def restricted(func):
     @wraps(func)
     async def wrapped(update: Update, context, *args, **kwargs):

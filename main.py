@@ -1,3 +1,4 @@
+import datetime
 import threading
 from typing import Optional
 import instaloader
@@ -6,6 +7,7 @@ from pathlib import Path
 import re
 import base64
 from telegram import (
+    ChatPermissions,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ChatMember,
@@ -34,6 +36,7 @@ from uuid import uuid4
 
 from urllib.parse import urlparse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from admin import ban_handler, unban_handler
 from conversations.video_download import (
     download_no,
     download_start,
@@ -43,7 +46,7 @@ from conversations.video_download import (
 from estados import DOWNLOAD_CHOOSING, DOWNLOADING
 from instagram import download_instagram_post
 from messages import RULES_MESSAGE, MENSAJES_INTERVALOS
-from utils import extract_status_change, restricted
+from utils import extract_status_change, isAdmin, restricted
 
 import logging
 import os
@@ -220,6 +223,44 @@ async def all_messages_handler(
             await update.message.reply_text(
                 "No se pueden enviar enlaces de TikTok en este grupo."
             )
+
+        telegram_domains = ["t.me", "telegram.me", "telegram.org"]
+        if url.hostname in telegram_domains:
+            if not isAdmin(user.id):
+                if update.effective_chat is None:
+                    return
+                # Now + 10 minutes (UTC Time)
+                until_date = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(minutes=2)
+
+                await update.effective_chat.restrict_member(
+                    user.id,
+                    until_date=until_date,
+                    permissions=ChatPermissions(
+                        can_send_messages=False,
+                    )
+                )
+                logger.info(f"El usuario {user.first_name} ha enviado un enlace de Telegram.")
+                await update.message.reply_text(
+                    "No se pueden enviar enlaces de Telegram en este grupo."
+                )
+
+        telegram_domains = ["bots.pb2a.com", "deepnude.us", "fknbot.com"]
+        if url.hostname in telegram_domains:
+            if not isAdmin(user.id):
+                if update.effective_chat is None:
+                    return
+                if update.effective_message is None:
+                    return
+                await update.effective_message.delete() 
+                await update.effective_chat.ban_member(
+                    user.id,
+                    until_date=None,  # type: ignore
+                    revoke_messages=False
+                )
+               
+
+
+
     except:
         pass
 
@@ -233,6 +274,16 @@ async def all_messages_handler(
             encoded_text = f"WRD: {palabra} UID: {user.id} UNM: {user.username}"
             # Codificar el texto en base64
             encoded_b64 = base64.b64encode(encoded_text.encode()).decode()
+            
+            # Borrar el mensaje original
+            if update.effective_chat is not None:
+                try:
+                    await update.effective_chat.delete_message(update.message.message_id)
+                    logger.info(f"Mensaje con palabra prohibida borrado: {palabra}")
+                except Exception as e:
+                    logger.error(f"No se pudo borrar el mensaje: {e}")
+            
+            # Enviar la notificación
             await update.message.reply_text(
                 f"Ojo que te cojo\. @diidinaeg \n `@{bot_username} {encoded_b64}`", # type: ignore
                 parse_mode=ParseMode.MARKDOWN_V2,
@@ -374,6 +425,8 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("rules", rules_handler))
     application.add_handler(CommandHandler("decode", decode_base64))
+    application.add_handler(CommandHandler("ban", ban_handler))
+    application.add_handler(CommandHandler("unban", unban_handler))
     application.add_handler(
         ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER)
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
