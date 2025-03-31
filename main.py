@@ -36,7 +36,7 @@ from uuid import uuid4
 
 from urllib.parse import urlparse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from admin import ban_handler, unban_handler
+from admin import ban_handler, unban_handler, unrestrict_handler
 from conversations.video_download import (
     download_no,
     download_start,
@@ -229,8 +229,8 @@ async def all_messages_handler(
             if not isAdmin(user.id):
                 if update.effective_chat is None:
                     return
-                # Now + 10 minutes (UTC Time)
-                until_date = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(minutes=2)
+                # Now + 7 days (UTC Time)
+                until_date = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(days=7) 
 
                 await update.effective_chat.restrict_member(
                     user.id,
@@ -427,6 +427,7 @@ def main() -> None:
     application.add_handler(CommandHandler("decode", decode_base64))
     application.add_handler(CommandHandler("ban", ban_handler))
     application.add_handler(CommandHandler("unban", unban_handler))
+    application.add_handler(CommandHandler("unrestrict", unrestrict_handler))
     application.add_handler(
         ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER)
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
