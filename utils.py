@@ -1,17 +1,49 @@
 from typing import Optional
+from uuid import uuid4
+import logging
 
-from telegram import ChatMember, ChatMemberUpdated
+from telegram import ChatMember, ChatMemberUpdated, InlineQueryResultArticle, InputTextMessageContent, Update
+from telegram.constants import ParseMode
 
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 LIST_OF_ADMINS = [906631113]
 
 def restricted(func):
     @wraps(func)
-    async def wrapped(update, context, *args, **kwargs):
+    async def wrapped(update: Update, context, *args, **kwargs):
+        if update.effective_user is None:
+            return
         user_id = update.effective_user.id
         if user_id not in LIST_OF_ADMINS:
             print(f"Unauthorized access denied for {user_id}.")
+            try:
+                if update.inline_query is None or update.inline_query.query is None:
+                    return
+                query = update.inline_query.query
+                
+                if not query:
+                    return
+
+                user_mention = update.effective_user.mention_markdown_v2()
+                results = []
+                results.append(
+                    InlineQueryResultArticle(
+                        id=str(uuid4()),
+                        title="Kitty",
+                        input_message_content=InputTextMessageContent(
+                            f"{user_mention} la chupa",
+                            parse_mode=ParseMode.MARKDOWN_V2
+                        ),
+                        description=f"-20 creditos sociales"
+                    )
+                )
+                await update.inline_query.answer(results, is_personal=True, cache_time=0)
+            except Exception as e:
+                logger.error(f"Error while handling inline query: {e}")
+                return
             return
         return await func(update, context, *args, **kwargs)
     return wrapped

@@ -4,6 +4,7 @@ import instaloader
 import tempfile
 from pathlib import Path
 import re
+import base64
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -11,6 +12,8 @@ from telegram import (
     ChatMemberUpdated,
     Update,
     Message,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
 )
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -23,8 +26,11 @@ from telegram.ext import (
     MessageHandler,
     CallbackContext,
     ChatMemberHandler,
+    InlineQueryHandler,
     filters,
 )
+from io import BytesIO
+from uuid import uuid4
 
 from urllib.parse import urlparse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -86,7 +92,7 @@ async def start_handler(update: Update, context: CallbackContext) -> None:
     message = (
         f"Hola, [{user.first_name}](tg://user?id={user.id}) soy Manolito,\n"
         "estoy aquí para ayudarte con la gestión de tu bar\n"
-        "\¿qué necitas\?"  # type: ignore
+        "¿qué necitas\?"  # type: ignore
     )
     await update.message.reply_text(message, parse_mode="MarkdownV2")
 
@@ -181,9 +187,6 @@ async def all_messages_handler(
             logger.info(
                 f"El usuario {user.first_name} ha enviado un enlace de Instagram."
             )
-            await update.message.reply_text(
-                "Descargando contenido de Instagram, por favor espera..."
-            )
             
             # Descargar el post de Instagram
             media_contents = await download_instagram_post(url_link)
@@ -191,7 +194,6 @@ async def all_messages_handler(
             if media_contents:
                 # Enviar cada archivo como respuesta al mensaje original
                 for filename, content, mime_type in media_contents:
-                    from io import BytesIO
                     file_obj = BytesIO(content)
                     file_obj.name = filename
                     
@@ -206,7 +208,6 @@ async def all_messages_handler(
                             caption=f"Contenido descargado de Instagram"
                         )
                         
-                await update.message.reply_text("¡Descarga de Instagram completada!")
             else:
                 await update.message.reply_text(
                     "Lo siento, no pude descargar el contenido de Instagram."
@@ -220,6 +221,26 @@ async def all_messages_handler(
             )
     except:
         pass
+
+    # Palabras baneadas
+    palabras_baneadas = [
+        "menor", "caldo de pollo", "CP", "menores", "menor de edad", "amiga", "ex"
+    ]
+    for palabra in palabras_baneadas:
+        if palabra.lower() in message.lower().replace("?"," ").replace("."," ").replace(","," ").split():
+            bot_username = context.bot.username
+            encoded_text = f"WRD: {palabra} UID: {user.id} UNM: {user.username}"
+            # Codificar el texto en base64
+            encoded_b64 = base64.b64encode(encoded_text.encode()).decode()
+            await update.message.reply_text(
+                f"Ojo que te cojo\. @diidinaeg \n `@{bot_username} {encoded_b64}`",
+                parse_mode=ParseMode.MARKDOWN_V2,
+                disable_web_page_preview=True,
+            )
+            logger.warning(
+                f"El usuario {user.first_name} (id: {user.id} @{user.username}) ha enviado un mensaje que contiene una palabra prohibida: {palabra}."
+            )
+            return
 
 
 async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -338,6 +359,60 @@ async def download_instagram_post(url: str) -> list[tuple[str, bytes, str]]:
         logger.error(f"Error descargando el post de Instagram: {str(e)}")
         return []
 
+@restricted
+async def decode_base64(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Decodifica un texto en base64"""
+    if update.effective_user is None or update.message is None:
+        return
+    if context.args is None or len(context.args) == 0:
+        await update.message.reply_text("Uso: /decode [texto_base64]")
+        return
+    
+    encoded_text = ' '.join(context.args)
+    try:
+        decoded_text = base64.b64decode(encoded_text.encode()).decode('utf-8')
+        await update.message.reply_text(f"Texto decodificado:\n`{decoded_text}`", parse_mode=ParseMode.MARKDOWN_V2)
+    except Exception as e:
+        await update.message.reply_text(f"Error al decodificar: {str(e)}")
+
+@restricted
+async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja consultas inline para decodificar base64"""
+    if update.inline_query is None or update.inline_query.query is None:
+        return
+    query = update.inline_query.query
+    
+    if not query:
+        return
+    
+    results = []
+    try:
+        # Intentar decodificar el texto en base64
+        decoded_text = base64.b64decode(query.encode()).decode('utf-8')
+        results.append(
+            InlineQueryResultArticle(
+                id=str(uuid4()),
+                title="Decodificar Base64",
+                input_message_content=InputTextMessageContent(
+                    f"\+20€",
+                    parse_mode=ParseMode.MARKDOWN_V2
+                ),
+                description=f"Resultado: {decoded_text[:15]}..." if len(decoded_text) > 50 else f"Resultado: {decoded_text}"
+            )
+        )
+    except Exception as e:
+        results.append(
+            InlineQueryResultArticle(
+                id=str(uuid4()),
+                title="Error al decodificar",
+                input_message_content=InputTextMessageContent(
+                    "No se pudo decodificar el texto en base64."
+                ),
+                description="El texto proporcionado no es un base64 válido."
+            )
+        )
+    
+    await update.inline_query.answer(results, is_personal=True, cache_time=0)
 
 def main() -> None:
     # run_parallel_http_server()
@@ -364,9 +439,13 @@ def main() -> None:
     # Añadir manejador para el comando /start
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("rules", rules_handler))
+    application.add_handler(CommandHandler("decode", decode_base64))
     application.add_handler(
         ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER)
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios
+
+    # Añadir manejador para consultas inline
+    application.add_handler(InlineQueryHandler(inline_query_handler))
 
     # Run the bot until the user presses Ctrl-C
     application.add_handler(CommandHandler("auto", start_auto_messaging))
