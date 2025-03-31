@@ -151,125 +151,176 @@ async def rules_handler(update: Update, context: CallbackContext) -> None:
 async def all_messages_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    user = update.effective_user
-    if user is None or update.message is None:
+    
+    if update.effective_message is None:
         return
+
+    if update.effective_user is None:
+        return
+    user = update.effective_user
+    message_text = update.effective_message.text
     
     print(f"El usuario {user.first_name} (id: {user.id}) ha enviado un mensaje.")
-    message = update.message.text
     
-    if message is None:
+    if message_text is None:
         return
 
+    message_detected_urls = re.findall(r"(https?://[^\s]+)", message_text)
+    message_detected_urls = set(message_detected_urls)
+
+    # Si la URL parseada no tiene hostname, buscar entidades de tipo URL
+    if update.effective_message and update.effective_message.entities:
+        for entity in update.effective_message.entities:
+            if entity.type.lower() == "url":
+                # Extraer la URL de la entidad
+                entity_url = message_text[
+                    entity.offset : entity.offset + entity.length
+                ]
+                if "http://" not in entity_url and "https://" not in entity_url:
+                    entity_url = "http://" + entity_url
+
+                # Comprobar si la URL es válida
+                try:
+                    _url = urlparse(entity_url)
+                    if not _url.scheme or not _url.netloc or not _url.path or not _url.hostname:
+                        raise ValueError("URL inválida")
+                    message_detected_urls.add(entity_url)
+                except ValueError:
+                    logger.error(f"URL inválida: {entity_url}")
+                    continue
+
+
+                internal_entity_url = entity.url
+                # logger.info(f"El usuario {user.first_name} ha enviado una entidad URL. Entidad URL: {internal_entity_url} {entity_url} {entity.type}")
+                if internal_entity_url is not None:
+                    # Comprobar si la URL es válida
+                    try:
+                        _url = urlparse(internal_entity_url)
+                        if not _url.scheme or not _url.netloc or not _url.path or not _url.hostname:
+                            raise ValueError("URL inválida")
+                    except ValueError:
+                        logger.error(f"URL inválida: {internal_entity_url}")
+                        continue
+                    logger.info(f"URL extraída: {internal_entity_url}")
+                    message_detected_urls.add(internal_entity_url)
+            
+    logger.info(f"Usuario {user.first_name} ha enviado un mensaje con enlaces: {message_detected_urls}")
+
     # Comprobar si el mensaje contiene un enlace.
-    try:
-        url = urlparse(message)
-        url_link = url.geturl()
-        # Check if the url a youtube link
-        youtube_domains = ["www.youtube.com", "youtube.com", "youtu.be"]
-        if url.hostname in youtube_domains:
-            logger.info(
-                f"El usuario {user.first_name} ha enviado un enlace de YouTube."
-            )
-            buttons = [
-                [
-                    InlineKeyboardButton(
-                        text="Iniciar descarga",
-                        callback_data=f"start_download:{url_link}",
-                    )
-                ],
-            ]
-            keyboard = InlineKeyboardMarkup(buttons)
+    async def check_urls(msg_url: str = "") -> None:
+        try:
+            url = urlparse(msg_url)
+            url_link = url.geturl()
+            if update.effective_message is None:
+                return
 
-            await update.message.reply_text(
-                f"Haz clic en el botón para iniciar el proceso de descarga para:\n{url_link}",
-                reply_markup=keyboard,
-            )
+            
+            # Check if the url a youtube link
+            youtube_domains = ["www.youtube.com", "youtube.com", "youtu.be"]
+            if url.hostname in youtube_domains and update.effective_message.text == msg_url:
+                logger.info(
+                    f"El usuario {user.first_name} ha enviado un enlace de YouTube."
+                )
+                buttons = [
+                    [
+                        InlineKeyboardButton(
+                            text="Iniciar descarga",
+                            callback_data=f"start_download:{url_link}",
+                        )
+                    ],
+                ]
+                keyboard = InlineKeyboardMarkup(buttons)
 
-        instagram_domains = ["www.instagram.com", "instagram.com"]
-        if url.hostname in instagram_domains:
-            logger.info(
-                f"El usuario {user.first_name} ha enviado un enlace de Instagram."
-            )
-            
-            # Descargar el post de Instagram
-            media_contents = await download_instagram_post(url_link)
-            
-            if media_contents:
-                # Enviar cada archivo como respuesta al mensaje original
-                for filename, content, mime_type in media_contents:
-                    file_obj = BytesIO(content)
-                    file_obj.name = filename
-                    
-                    if mime_type.startswith('image/'):
-                        await update.message.reply_photo(
-                            photo=file_obj,
-                            caption=f"Contenido descargado de Instagram"
-                        )
-                    elif mime_type.startswith('video/'):
-                        await update.message.reply_video(
-                            video=file_obj,
-                            caption=f"Contenido descargado de Instagram"
-                        )
+                await update.effective_message.reply_text(
+                    f"Haz clic en el botón para iniciar el proceso de descarga para:\n{url_link}",
+                    reply_markup=keyboard,
+                )
+
+            instagram_domains = ["www.instagram.com", "instagram.com"]
+            if url.hostname in instagram_domains and update.effective_message.text == msg_url:
+                logger.info(
+                    f"El usuario {user.first_name} ha enviado un enlace de Instagram."
+                )
+                
+                # Descargar el post de Instagram
+                media_contents = await download_instagram_post(url_link)
+                
+                if media_contents:
+                    # Enviar cada archivo como respuesta al mensaje original
+                    for filename, content, mime_type in media_contents:
+                        file_obj = BytesIO(content)
+                        file_obj.name = filename
                         
-            else:
-                await update.message.reply_text(
-                    "Lo siento, no pude descargar el contenido de Instagram."
-                )
-
-        tiktok_domains = ["www.tiktok.com", "tiktok.com"]
-        if url.hostname in tiktok_domains:
-            logger.info(f"El usuario {user.first_name} ha enviado un enlace de TikTok.")
-            await update.message.reply_text(
-                "No se pueden enviar enlaces de TikTok en este grupo."
-            )
-
-        telegram_domains = ["t.me", "telegram.me", "telegram.org"]
-        if url.hostname in telegram_domains:
-            if not isAdmin(user.id):
-                if update.effective_chat is None:
-                    return
-                # Now + 7 days (UTC Time)
-                until_date = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(days=7) 
-
-                await update.effective_chat.restrict_member(
-                    user.id,
-                    until_date=until_date,
-                    permissions=ChatPermissions(
-                        can_send_messages=False,
+                        if mime_type.startswith('image/'):
+                            await update.effective_message.reply_photo(
+                                photo=file_obj,
+                                caption=f"Contenido descargado de Instagram"
+                            )
+                        elif mime_type.startswith('video/'):
+                            await update.effective_message.reply_video(
+                                video=file_obj,
+                                caption=f"Contenido descargado de Instagram"
+                            )
+                            
+                else:
+                    await update.effective_message.reply_text(
+                        "Lo siento, no pude descargar el contenido de Instagram."
                     )
+
+            tiktok_domains = ["www.tiktok.com", "tiktok.com"]
+            if url.hostname in tiktok_domains:
+                logger.info(f"El usuario {user.first_name} ha enviado un enlace de TikTok.")
+                await update.effective_message.reply_text(
+                    "No se pueden enviar enlaces de TikTok en este grupo."
                 )
-                logger.info(f"El usuario {user.first_name} ha enviado un enlace de Telegram.")
-                await update.message.reply_text(
-                    "No se pueden enviar enlaces de Telegram en este grupo."
-                )
 
-        telegram_domains = ["bots.pb2a.com", "deepnude.us", "fknbot.com"]
-        if url.hostname in telegram_domains:
-            if not isAdmin(user.id):
-                if update.effective_chat is None:
-                    return
-                if update.effective_message is None:
-                    return
-                await update.effective_message.delete() 
-                await update.effective_chat.ban_member(
-                    user.id,
-                    until_date=None,  # type: ignore
-                    revoke_messages=False
-                )
-               
+            telegram_domains = ["t.me", "telegram.me", "telegram.org"]
+            if url.hostname in telegram_domains:
+                if not isAdmin(user.id):
+                    if update.effective_chat is None:
+                        return
+                    # Now + 7 days (UTC Time)
+                    until_date = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(days=7) 
 
+                    await update.effective_chat.restrict_member(
+                        user.id,
+                        until_date=until_date,
+                        permissions=ChatPermissions(
+                            can_send_messages=False,
+                        )
+                    )
+                    logger.info(f"El usuario {user.first_name} ha enviado un enlace de Telegram.")
+                    await update.effective_message.reply_text(
+                        "No se pueden enviar enlaces de Telegram en este grupo."
+                    )
 
+            telegram_domains = ["bots.pb2a.com", "deepnude.us", "fknbot.com"]
+            if url.hostname in telegram_domains:
+                if not isAdmin(user.id):
+                    if update.effective_chat is None:
+                        return
+                    if update.effective_message is None:
+                        return
+                    await update.effective_message.delete() 
+                    await update.effective_chat.ban_member(
+                        user.id,
+                        until_date=None,  # type: ignore
+                        revoke_messages=False
+                    )
+                
 
-    except:
-        pass
+        except:
+            pass
+    
+    for msg_url in message_detected_urls:
+        await check_urls(msg_url)
 
     # Palabras baneadas
     palabras_baneadas = [
         "menor", "caldo de pollo", "CP", "menores", "menor de edad", "amiga", "ex"
     ]
     for palabra in palabras_baneadas:
-        if palabra.lower() in message.lower().replace("?"," ").replace("."," ").replace(","," ").split():
+        if palabra.lower() in message_text.lower().replace("?"," ").replace("."," ").replace(","," ").split():
             bot_username = context.bot.username
             encoded_text = f"WRD: {palabra} UID: {user.id} UNM: {user.username}"
             # Codificar el texto en base64
@@ -278,13 +329,13 @@ async def all_messages_handler(
             # Borrar el mensaje original
             if update.effective_chat is not None:
                 try:
-                    await update.effective_chat.delete_message(update.message.message_id)
+                    await update.effective_chat.delete_message(update.effective_message.message_id)
                     logger.info(f"Mensaje con palabra prohibida borrado: {palabra}")
                 except Exception as e:
                     logger.error(f"No se pudo borrar el mensaje: {e}")
             
             # Enviar la notificación
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"Ojo que te cojo\. @diidinaeg \n `@{bot_username} {encoded_b64}`", # type: ignore
                 parse_mode=ParseMode.MARKDOWN_V2,
                 disable_web_page_preview=True,
