@@ -59,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 class MyServer(threading.Thread):
     def run(self):
+        logger.info("Iniciando servidor HTTP en el puerto 8080")
         self.server = ThreadingHTTPServer(('localhost', 8080), SimpleHTTPRequestHandler)
         self.server.serve_forever()
     def stop(self):
