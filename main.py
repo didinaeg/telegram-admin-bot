@@ -27,7 +27,7 @@ from telegram.ext import (
 )
 
 from urllib.parse import urlparse
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from conversations.video_download import (
     download_no,
     download_start,
@@ -56,11 +56,20 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
+class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"Hello, world!")
+
+    def log_message(self, format: str, *args: Optional[str]) -> None:
+        return  # Disable logging for HTTP requests
 
 class MyServer(threading.Thread):
     def run(self):
         logger.info("Iniciando servidor HTTP en el puerto 8080")
-        self.server = ThreadingHTTPServer(('', 8080), SimpleHTTPRequestHandler)
+        self.server = ThreadingHTTPServer(('', 8080), CustomHTTPRequestHandler)
         self.server.serve_forever()
     def stop(self):
         self.server.shutdown()
