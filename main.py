@@ -26,7 +26,8 @@ from telegram.ext import (
 )
 
 from urllib.parse import urlparse
-
+import concurrent.futures
+import http.server
 from conversations.video_download import (
     download_no,
     download_start,
@@ -56,6 +57,17 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 logger = logging.getLogger(__name__)
+
+def run_http_server():
+    port = 8080
+    server_address = ('', port)
+    httpd = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
+    httpd.serve_forever()
+
+def run_parallel_http_server():
+    executor = concurrent.futures.ThreadPoolExecutor()
+    executor.submit(run_http_server)
+    executor.shutdown(wait=False)
 
 
 # Función para manejar el comando /start
@@ -130,7 +142,7 @@ async def all_messages_handler(
     
     print(f"El usuario {user.first_name} (id: {user.id}) ha enviado un mensaje.")
     message = update.message.text
-
+    
     if message is None:
         return
 
@@ -323,6 +335,8 @@ async def download_instagram_post(url: str) -> list[tuple[str, bytes, str]]:
 
 
 def main() -> None:
+    run_parallel_http_server()
+
     # Reemplaza 'YOUR_TOKEN' con el token de tu bot
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
     if TELEGRAM_BOT_TOKEN is None:
