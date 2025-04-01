@@ -66,6 +66,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
+
 class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -76,11 +77,13 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Optional[str]) -> None:
         return  # Disable logging for HTTP requests
 
+
 class MyServer(threading.Thread):
     def run(self):
         logger.info("Iniciando servidor HTTP en el puerto 8080")
-        self.server = ThreadingHTTPServer(('', 8080), CustomHTTPRequestHandler)
+        self.server = ThreadingHTTPServer(("", 8080), CustomHTTPRequestHandler)
         self.server.serve_forever()
+
     def stop(self):
         self.server.shutdown()
 
@@ -150,12 +153,14 @@ async def delete_message_callback(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     chat_id = job_data.get("chat_id")
     message_id = job_data.get("message_id")
-    
+
     try:
         if chat_id is None or message_id is None:
             return
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        logger.info(f"Mensaje {message_id} eliminado automáticamente del chat {chat_id}")
+        logger.info(
+            f"Mensaje {message_id} eliminado automáticamente del chat {chat_id}"
+        )
     except Exception as e:
         logger.error(f"No se pudo eliminar el mensaje: {e}")
 
@@ -164,37 +169,38 @@ async def rules_handler(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     if user is None or update.message is None:
         return
-    rules_message = await update.message.reply_text(RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2)
+    rules_message = await update.message.reply_text(
+        RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2
+    )
     intervalo = 60 * 60 * 13
-    
+
     # Programar la eliminación del mensaje después de 10 minutos
     if context.job_queue:
         delete_time = 16  # 10 minutos en segundos
         if update.effective_chat is None:
             return
         context.job_queue.run_once(
-            delete_message_callback, 
+            delete_message_callback,
             delete_time,
-         
             data={
-              
                 "chat_id": update.effective_chat.id,
-                "message_id": rules_message.message_id
-            }
+                "message_id": rules_message.message_id,
+            },
         )
-        logger.info(f"Programada eliminación automática del mensaje de reglas en {delete_time} segundos")
-    
+        logger.info(
+            f"Programada eliminación automática del mensaje de reglas en {delete_time} segundos"
+        )
+
     # check if the user is an admin
     if context.job_queue is None:
         return
-    context.job_queue.run_once(
-        callback_auto_message, intervalo)
+    context.job_queue.run_once(callback_auto_message, intervalo)
 
 
 async def all_messages_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    
+
     if update.effective_message is None:
         return
 
@@ -202,9 +208,9 @@ async def all_messages_handler(
         return
     user = update.effective_user
     message_text = update.effective_message.text
-    
+
     print(f"El usuario {user.first_name} (id: {user.id}) ha enviado un mensaje.")
-    
+
     if message_text is None:
         return
 
@@ -216,22 +222,24 @@ async def all_messages_handler(
         for entity in update.effective_message.entities:
             if entity.type.lower() == "url":
                 # Extraer la URL de la entidad
-                entity_url = message_text[
-                    entity.offset : entity.offset + entity.length
-                ]
+                entity_url = message_text[entity.offset : entity.offset + entity.length]
                 if "http://" not in entity_url and "https://" not in entity_url:
                     entity_url = "http://" + entity_url
 
                 # Comprobar si la URL es válida
                 try:
                     _url = urlparse(entity_url)
-                    if not _url.scheme or not _url.netloc or not _url.path or not _url.hostname:
+                    if (
+                        not _url.scheme
+                        or not _url.netloc
+                        or not _url.path
+                        or not _url.hostname
+                    ):
                         raise ValueError("URL inválida")
                     message_detected_urls.add(entity_url)
                 except ValueError:
                     logger.error(f"URL inválida: {entity_url}")
                     continue
-
 
                 internal_entity_url = entity.url
                 # logger.info(f"El usuario {user.first_name} ha enviado una entidad URL. Entidad URL: {internal_entity_url} {entity_url} {entity.type}")
@@ -239,15 +247,22 @@ async def all_messages_handler(
                     # Comprobar si la URL es válida
                     try:
                         _url = urlparse(internal_entity_url)
-                        if not _url.scheme or not _url.netloc or not _url.path or not _url.hostname:
+                        if (
+                            not _url.scheme
+                            or not _url.netloc
+                            or not _url.path
+                            or not _url.hostname
+                        ):
                             raise ValueError("URL inválida")
                     except ValueError:
                         logger.error(f"URL inválida: {internal_entity_url}")
                         continue
                     logger.info(f"URL extraída: {internal_entity_url}")
                     message_detected_urls.add(internal_entity_url)
-            
-    logger.info(f"Usuario {user.first_name} ha enviado un mensaje con enlaces: {message_detected_urls}")
+
+    logger.info(
+        f"Usuario {user.first_name} ha enviado un mensaje con enlaces: {message_detected_urls}"
+    )
 
     # Comprobar si el mensaje contiene un enlace.
     async def check_urls(msg_url: str = "") -> None:
@@ -257,10 +272,12 @@ async def all_messages_handler(
             if update.effective_message is None:
                 return
 
-            
             # Check if the url a youtube link
             youtube_domains = ["www.youtube.com", "youtube.com", "youtu.be"]
-            if url.hostname in youtube_domains and update.effective_message.text == msg_url:
+            if (
+                url.hostname in youtube_domains
+                and update.effective_message.text == msg_url
+            ):
                 logger.info(
                     f"El usuario {user.first_name} ha enviado un enlace de YouTube."
                 )
@@ -280,31 +297,34 @@ async def all_messages_handler(
                 )
 
             instagram_domains = ["www.instagram.com", "instagram.com"]
-            if url.hostname in instagram_domains and update.effective_message.text == msg_url:
+            if (
+                url.hostname in instagram_domains
+                and update.effective_message.text == msg_url
+            ):
                 logger.info(
                     f"El usuario {user.first_name} ha enviado un enlace de Instagram."
                 )
-                
+
                 # Descargar el post de Instagram
                 media_contents = await download_instagram_post(url_link)
-                
+
                 if media_contents:
                     # Enviar cada archivo como respuesta al mensaje original
                     for filename, content, mime_type in media_contents:
                         file_obj = BytesIO(content)
                         file_obj.name = filename
-                        
-                        if mime_type.startswith('image/'):
+
+                        if mime_type.startswith("image/"):
                             await update.effective_message.reply_photo(
                                 photo=file_obj,
-                                caption=f"Contenido descargado de Instagram"
+                                caption=f"Contenido descargado de Instagram",
                             )
-                        elif mime_type.startswith('video/'):
+                        elif mime_type.startswith("video/"):
                             await update.effective_message.reply_video(
                                 video=file_obj,
-                                caption=f"Contenido descargado de Instagram"
+                                caption=f"Contenido descargado de Instagram",
                             )
-                            
+
                 else:
                     await update.effective_message.reply_text(
                         "Lo siento, no pude descargar el contenido de Instagram."
@@ -312,7 +332,9 @@ async def all_messages_handler(
 
             tiktok_domains = ["www.tiktok.com", "tiktok.com"]
             if url.hostname in tiktok_domains:
-                logger.info(f"El usuario {user.first_name} ha enviado un enlace de TikTok.")
+                logger.info(
+                    f"El usuario {user.first_name} ha enviado un enlace de TikTok."
+                )
                 await update.effective_message.reply_text(
                     "No se pueden enviar enlaces de TikTok en este grupo."
                 )
@@ -323,20 +345,24 @@ async def all_messages_handler(
                     if update.effective_chat is None:
                         return
                     # Now + 7 days (UTC Time)
-                    until_date = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(days=7) 
+                    until_date = datetime.datetime.now(
+                        tz=datetime.timezone.utc
+                    ) + datetime.timedelta(days=7)
 
                     await update.effective_chat.restrict_member(
                         user.id,
                         until_date=until_date,
                         permissions=ChatPermissions(
                             can_send_messages=False,
-                        )
+                        ),
                     )
-                    logger.info(f"El usuario {user.first_name} ha enviado un enlace de Telegram.")
-                    
+                    logger.info(
+                        f"El usuario {user.first_name} ha enviado un enlace de Telegram."
+                    )
+
                     # Borrar el mensaje original
                     await update.effective_message.delete()
-                    
+
                     # await update.effective_message.reply_text(
                     #     "No se pueden enviar enlaces de Telegram en este grupo."
                     # )
@@ -348,31 +374,41 @@ async def all_messages_handler(
                         return
                     if update.effective_message is None:
                         return
-                    await update.effective_message.delete() 
+                    await update.effective_message.delete()
                     await update.effective_chat.ban_member(
-                        user.id,
-                        until_date=None,  # type: ignore
-                        revoke_messages=False
+                        user.id, until_date=None, revoke_messages=False  # type: ignore
                     )
-                
 
         except:
             pass
-    
+
     for msg_url in message_detected_urls:
         await check_urls(msg_url)
 
     # Palabras baneadas
     palabras_baneadas = [
-        "menor", "caldo de pollo", "CP", "menores", "menor de edad", "amiga", "ex"
+        "menor",
+        "caldo de pollo",
+        "CP",
+        "menores",
+        "menor de edad",
+        "amiga",
+        "ex",
     ]
     for palabra in palabras_baneadas:
-        if palabra.lower() in message_text.lower().replace("?"," ").replace("."," ").replace(","," ").split():
+        if (
+            palabra.lower()
+            in message_text.lower()
+            .replace("?", " ")
+            .replace(".", " ")
+            .replace(",", " ")
+            .split()
+        ):
             bot_username = context.bot.username
             encoded_text = f"WRD: {palabra} UID: {user.id} UNM: {user.username}"
             # Codificar el texto en base64
             encoded_b64 = base64.b64encode(encoded_text.encode()).decode()
-            
+
             # Borrar el mensaje original
             # if update.effective_chat is not None:
             #     try:
@@ -380,10 +416,10 @@ async def all_messages_handler(
             #         logger.info(f"Mensaje con palabra prohibida borrado: {palabra}")
             #     except Exception as e:
             #         logger.error(f"No se pudo borrar el mensaje: {e}")
-            
+
             # Enviar la notificación
             await update.effective_message.reply_text(
-                f"Ojo que te cojo\. @diidinaeg \n `@{bot_username} {encoded_b64}`", # type: ignore
+                f"Ojo que te cojo\. @diidinaeg \n `@{bot_username} {encoded_b64}`",  # type: ignore
                 parse_mode=ParseMode.MARKDOWN_V2,
                 disable_web_page_preview=True,
             )
@@ -402,13 +438,18 @@ async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
     mensaje = random.choice(MENSAJES_INTERVALOS).replace(".", "\.").replace("-", "\-").replace("(", "\(").replace(")", "\)").replace("_", "\_").replace("[", "\[").replace("]", "\]").replace("!", "\!")  # type: ignore
     await context.bot.send_message(chat_id=chat_id, text=MENSAJES_INTERVALOS[0])
 
+
 @restricted
 async def start_auto_messaging(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Inicia el envío de mensajes automáticos"""
     logger.info("Iniciando mensajes automáticos")
-    if update.effective_chat is None or update.effective_message is None or context.job_queue is None:
+    if (
+        update.effective_chat is None
+        or update.effective_message is None
+        or context.job_queue is None
+    ):
         return
     chat_id = update.effective_message.chat.id
     intervalo = 60 * 60 * 13
@@ -450,37 +491,45 @@ async def decode_base64(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if context.args is None or len(context.args) == 0:
         await update.message.reply_text("Uso: /decode [texto_base64]")
         return
-    
-    encoded_text = ' '.join(context.args)
+
+    encoded_text = " ".join(context.args)
     try:
-        decoded_text = base64.b64decode(encoded_text.encode()).decode('utf-8')
-        await update.message.reply_text(f"Texto decodificado:\n`{decoded_text}`", parse_mode=ParseMode.MARKDOWN_V2)
+        decoded_text = base64.b64decode(encoded_text.encode()).decode("utf-8")
+        await update.message.reply_text(
+            f"Texto decodificado:\n`{decoded_text}`", parse_mode=ParseMode.MARKDOWN_V2
+        )
     except Exception as e:
         await update.message.reply_text(f"Error al decodificar: {str(e)}")
 
+
 @restricted
-async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def inline_query_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Maneja consultas inline para decodificar base64"""
     if update.inline_query is None or update.inline_query.query is None:
         return
     query = update.inline_query.query
-    
+
     if not query:
         return
-    
+
     results = []
     try:
         # Intentar decodificar el texto en base64
-        decoded_text = base64.b64decode(query.encode()).decode('utf-8')
+        decoded_text = base64.b64decode(query.encode()).decode("utf-8")
         results.append(
             InlineQueryResultArticle(
                 id=str(uuid4()),
                 title="Decodificar Base64",
                 input_message_content=InputTextMessageContent(
-                    f"\+20€", # type: ignore
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    f"\+20€", parse_mode=ParseMode.MARKDOWN_V2  # type: ignore
                 ),
-                description=f"Resultado: {decoded_text[:15]}..." if len(decoded_text) > 50 else f"Resultado: {decoded_text}"
+                description=(
+                    f"Resultado: {decoded_text[:15]}..."
+                    if len(decoded_text) > 50
+                    else f"Resultado: {decoded_text}"
+                ),
             )
         )
     except Exception as e:
@@ -491,11 +540,12 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 input_message_content=InputTextMessageContent(
                     "No se pudo decodificar el texto en base64."
                 ),
-                description="El texto proporcionado no es un base64 válido."
+                description="El texto proporcionado no es un base64 válido.",
             )
         )
-    
+
     await update.inline_query.answer(results, is_personal=True, cache_time=0)
+
 
 def main() -> None:
     # run_parallel_http_server()
@@ -564,5 +614,7 @@ def main() -> None:
         logger.info("Servidor HTTP cerrado.")
         s.stop()
         s.join()
+
+
 if __name__ == "__main__":
     main()
