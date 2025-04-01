@@ -16,43 +16,51 @@ def isAdmin(id):
     return id in LIST_OF_ADMINS
 
 
-def restricted(func):
-    @wraps(func)
-    async def wrapped(update: Update, context, *args, **kwargs):
-        if update.effective_user is None:
-            return
-        user_id = update.effective_user.id
-        if user_id not in LIST_OF_ADMINS:
-            print(f"Unauthorized access denied for {user_id}.")
-            try:
-                if update.inline_query is None or update.inline_query.query is None:
-                    return
-                query = update.inline_query.query
-                
-                if not query:
-                    return
-
-                user_mention = update.effective_user.mention_markdown_v2()
-                results = []
-                results.append(
-                    InlineQueryResultArticle(
-                        id=str(uuid4()),
-                        title="Kitty",
-                        input_message_content=InputTextMessageContent(
-                            f"{user_mention} la chupa",
-                            parse_mode=ParseMode.MARKDOWN_V2
-                        ),
-                        description=f"-20 creditos sociales"
-                    )
-                )
-                await update.inline_query.answer(results, is_personal=True, cache_time=0)
-            except Exception as e:
-                logger.error(f"Error while handling inline query: {e}")
+def restricted(*, reply=False, custom_message=None):
+    def decorator(func):
+        @wraps(func)
+        async def wrapped(update: Update, context, *args, **kwargs):
+            if update.effective_user is None:
                 return
-            return
-        return await func(update, context, *args, **kwargs)
-    return wrapped
-
+            user_id = update.effective_user.id
+            if user_id not in LIST_OF_ADMINS:
+                print(f"Unauthorized access denied for {user_id}.")
+                try:
+                    user_mention = update.effective_user.mention_markdown_v2()
+                    message = custom_message if custom_message else f"{user_mention} la chupa"
+                    
+                    # Manejar consulta inline
+                    if update.inline_query is not None:
+                        if update.inline_query.query is None or not update.inline_query.query:
+                            return
+                        
+                        results = []
+                        results.append(
+                            InlineQueryResultArticle(
+                                id=str(uuid4()),
+                                title="Kitty",
+                                input_message_content=InputTextMessageContent(
+                                    message,
+                                    parse_mode=ParseMode.MARKDOWN_V2
+                                ),
+                                description=f"-20 creditos sociales"
+                            )
+                        )
+                        await update.inline_query.answer(results, is_personal=True, cache_time=0)
+                    # Manejar mensaje normal
+                    elif update.message is not None and reply:
+                        await update.message.reply_text(
+                            message,
+                            parse_mode=ParseMode.MARKDOWN_V2
+                        )
+                except Exception as e:
+                    logger.error(f"Error while handling response: {e}")
+                    return
+                return
+            return await func(update, context, *args, **kwargs)
+        return wrapped
+    
+    return decorator
 
 
 def extract_status_change(

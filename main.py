@@ -136,10 +136,26 @@ async def greet_new_member(update: Update, context: CallbackContext) -> None:
             "\- Tipo sanguíneo\n"  # type: ignore
             "No nos hacemos responsables de daños o perjuicios hacia su propiedad privada \(por favor consulta las /rules\)"  # type: ignore
         )
-        await update.effective_chat.send_message(
+        b_message = await update.effective_chat.send_message(
             message,
             parse_mode=ParseMode.MARKDOWN_V2,
         )
+        # Programar la eliminación del mensaje después de 10 minutos
+        if context.job_queue:
+            delete_time = 10 * 60  # 10 minutos en segundos
+            if update.effective_chat is None:
+                return
+            context.job_queue.run_once(
+                delete_message_callback,
+                delete_time,
+                data={
+                    "chat_id": update.effective_chat.id,
+                    "message_id": b_message.message_id,
+                },
+            )
+            logger.info(
+                f"Programada eliminación automática del mensaje de reglas en {delete_time} segundos"
+            )
     elif was_member and not is_member:
         logger.warning(f"Despidiendo a {member_name} por salir del grupo.")
 
@@ -172,11 +188,10 @@ async def rules_handler(update: Update, context: CallbackContext) -> None:
     rules_message = await update.message.reply_text(
         RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2
     )
-    intervalo = 60 * 60 * 13
 
     # Programar la eliminación del mensaje después de 10 minutos
     if context.job_queue:
-        delete_time = 16  # 10 minutos en segundos
+        delete_time = 10 * 60  # 10 minutos en segundos
         if update.effective_chat is None:
             return
         context.job_queue.run_once(
@@ -191,10 +206,6 @@ async def rules_handler(update: Update, context: CallbackContext) -> None:
             f"Programada eliminación automática del mensaje de reglas en {delete_time} segundos"
         )
 
-    # check if the user is an admin
-    if context.job_queue is None:
-        return
-    context.job_queue.run_once(callback_auto_message, intervalo)
 
 
 async def all_messages_handler(
@@ -439,7 +450,7 @@ async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=chat_id, text=MENSAJES_INTERVALOS[0])
 
 
-@restricted
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
 async def start_auto_messaging(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -465,6 +476,7 @@ async def start_auto_messaging(
     await update.effective_message.reply_text("¡Mensajes automáticos iniciados!")
 
 
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
 async def stop_notify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Detiene el envío de mensajes automáticos"""
     if update.effective_chat is None or update.message is None:
@@ -483,7 +495,7 @@ async def stop_notify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("No hay mensajes automáticos activos.")
 
 
-@restricted
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
 async def decode_base64(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Decodifica un texto en base64"""
     if update.effective_user is None or update.message is None:
@@ -502,7 +514,7 @@ async def decode_base64(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(f"Error al decodificar: {str(e)}")
 
 
-@restricted
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
 async def inline_query_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:

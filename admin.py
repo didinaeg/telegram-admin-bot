@@ -6,7 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-@restricted
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
 async def ban_handler(update: Update, context: CallbackContext) -> None:
     if update.effective_chat is None:
         return
@@ -48,7 +48,7 @@ async def ban_handler(update: Update, context: CallbackContext) -> None:
     )
     logger.info(f"Banned user {target_user.id} from chat {update.effective_chat.id}")
 
-@restricted
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
 async def unban_handler(update: Update, context: CallbackContext) -> None:
     if update.effective_chat is None:
         return
@@ -88,7 +88,7 @@ async def unban_handler(update: Update, context: CallbackContext) -> None:
     logger.info(f"Unbanned user {target_user.id} from chat {update.effective_chat.id}")
 
 
-@restricted
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
 async def unrestrict_handler(update: Update, context: CallbackContext) -> None:
     if update.effective_chat is None:
         return
