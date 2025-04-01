@@ -290,9 +290,13 @@ async def all_messages_handler(
                         )
                     )
                     logger.info(f"El usuario {user.first_name} ha enviado un enlace de Telegram.")
-                    await update.effective_message.reply_text(
-                        "No se pueden enviar enlaces de Telegram en este grupo."
-                    )
+                    
+                    # Borrar el mensaje original
+                    await update.effective_message.delete()
+                    
+                    # await update.effective_message.reply_text(
+                    #     "No se pueden enviar enlaces de Telegram en este grupo."
+                    # )
 
             telegram_domains = ["bots.pb2a.com", "deepnude.us", "fknbot.com"]
             if url.hostname in telegram_domains:
@@ -327,12 +331,12 @@ async def all_messages_handler(
             encoded_b64 = base64.b64encode(encoded_text.encode()).decode()
             
             # Borrar el mensaje original
-            if update.effective_chat is not None:
-                try:
-                    await update.effective_chat.delete_message(update.effective_message.message_id)
-                    logger.info(f"Mensaje con palabra prohibida borrado: {palabra}")
-                except Exception as e:
-                    logger.error(f"No se pudo borrar el mensaje: {e}")
+            # if update.effective_chat is not None:
+            #     try:
+            #         await update.effective_chat.delete_message(update.effective_message.message_id)
+            #         logger.info(f"Mensaje con palabra prohibida borrado: {palabra}")
+            #     except Exception as e:
+            #         logger.error(f"No se pudo borrar el mensaje: {e}")
             
             # Enviar la notificación
             await update.effective_message.reply_text(
