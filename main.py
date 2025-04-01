@@ -141,11 +141,54 @@ async def greet_new_member(update: Update, context: CallbackContext) -> None:
         logger.warning(f"Despidiendo a {member_name} por salir del grupo.")
 
 
+async def delete_message_callback(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback para eliminar un mensaje específico"""
+    if context.job is None or context.job.data is None:
+        return
+    job_data = context.job.data
+    if not isinstance(job_data, dict):
+        return
+    chat_id = job_data.get("chat_id")
+    message_id = job_data.get("message_id")
+    
+    try:
+        if chat_id is None or message_id is None:
+            return
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        logger.info(f"Mensaje {message_id} eliminado automáticamente del chat {chat_id}")
+    except Exception as e:
+        logger.error(f"No se pudo eliminar el mensaje: {e}")
+
+
 async def rules_handler(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     if user is None or update.message is None:
         return
-    await update.message.reply_text(RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2)
+    rules_message = await update.message.reply_text(RULES_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2)
+    intervalo = 60 * 60 * 13
+    
+    # Programar la eliminación del mensaje después de 10 minutos
+    if context.job_queue:
+        delete_time = 16  # 10 minutos en segundos
+        if update.effective_chat is None:
+            return
+        context.job_queue.run_once(
+            delete_message_callback, 
+            delete_time,
+         
+            data={
+              
+                "chat_id": update.effective_chat.id,
+                "message_id": rules_message.message_id
+            }
+        )
+        logger.info(f"Programada eliminación automática del mensaje de reglas en {delete_time} segundos")
+    
+    # check if the user is an admin
+    if context.job_queue is None:
+        return
+    context.job_queue.run_once(
+        callback_auto_message, intervalo)
 
 
 async def all_messages_handler(
