@@ -46,7 +46,7 @@ from conversations.video_download import (
 from estados import DOWNLOAD_CHOOSING, DOWNLOADING
 from instagram import download_instagram_post
 from messages import RULES_MESSAGE, MENSAJES_INTERVALOS
-from utils import extract_status_change, isAdmin, restricted
+from utils import ADMIN_CHAT_ID, extract_status_change, isAdmin, restricted
 
 import logging
 import os
@@ -415,10 +415,9 @@ async def all_messages_handler(
             .replace(",", " ")
             .split()
         ):
-            bot_username = context.bot.username
-            encoded_text = f"WRD: {palabra} UID: {user.id} UNM: {user.username}"
+            # encoded_text = f"WRD: {palabra} UID: {user.id} UNM: {user.username}"
             # Codificar el texto en base64
-            encoded_b64 = base64.b64encode(encoded_text.encode()).decode()
+            # encoded_b64 = base64.b64encode(encoded_text.encode()).decode()
 
             # Borrar el mensaje original
             # if update.effective_chat is not None:
@@ -429,11 +428,27 @@ async def all_messages_handler(
             #         logger.error(f"No se pudo borrar el mensaje: {e}")
 
             # Enviar la notificación
-            await update.effective_message.reply_text(
-                f"Ojo que te cojo\. @diidinaeg \n `@{bot_username} {encoded_b64}`",  # type: ignore
-                parse_mode=ParseMode.MARKDOWN_V2,
-                disable_web_page_preview=True,
-            )
+            # await update.effective_message.reply_text(
+            #     f"Ojo que te cojo\. @diidinaeg \n `@{bot_username} {encoded_b64}`",  # type: ignore
+            #     parse_mode=ParseMode.MARKDOWN_V2,
+            #     disable_web_page_preview=True,
+            # )
+
+            # Get message link
+            if update.effective_chat is None or update.effective_message is None:
+                return
+            message_group_id = int(str(update.effective_chat.id).replace("-100", ""))
+            topic_id = ""
+            if update.effective_chat.is_forum:
+                logger.info(f"El grupo es un foro. ID: {message_group_id} topic_id: {update.effective_message.message_thread_id}")
+                topic_id = f"/{update.effective_message.message_thread_id}"
+            message_link = f"https://t.me/c/{message_group_id}{topic_id}/{update.effective_message.message_id}"
+            topic_title = update.effective_chat.title if update.effective_chat else "Grupo"
+            user_mention = user.mention_markdown_v2() if user.username else user.first_name
+            alert_text = f"\[ALERTA\] Palabra prohibida detectada en el grupo {topic_title} por @{user.username} \({user.id} \- {user_mention}\)\n\nPalabra: `{palabra}`\n\nMensaje: `{message_text}`\n\n[Ver mensaje]({message_link})\n\n"
+            logger.info(alert_text)
+            fwd_message = await update.effective_message.forward(chat_id=ADMIN_CHAT_ID)
+            await fwd_message.reply_text(text=alert_text, parse_mode=ParseMode.MARKDOWN_V2)
             logger.warning(
                 f"El usuario {user.first_name} (id: {user.id} @{user.username}) ha enviado un mensaje que contiene una palabra prohibida: {palabra}."
             )
@@ -558,6 +573,16 @@ async def inline_query_handler(
 
     await update.inline_query.answer(results, is_personal=True, cache_time=0)
 
+async def chatid_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Maneja el comando /chatid"""
+    if update.effective_chat is None or update.effective_message is None:
+        return
+
+    chat_id = update.effective_chat.id
+    message = f"El ID del chat es: `{chat_id}`"
+    await update.effective_message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
 
 def main() -> None:
     # run_parallel_http_server()
@@ -588,6 +613,7 @@ def main() -> None:
     application.add_handler(CommandHandler("ban", ban_handler))
     application.add_handler(CommandHandler("unban", unban_handler))
     application.add_handler(CommandHandler("unrestrict", unrestrict_handler))
+    application.add_handler(CommandHandler("chatid", chatid_handler))
     application.add_handler(
         ChatMemberHandler(greet_new_member, ChatMemberHandler.CHAT_MEMBER)
     )  # Se completa el ChatMemberHandler para saludar a nuevos usuarios

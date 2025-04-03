@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 LIST_OF_ADMINS = [906631113]
 
+ADMIN_CHAT_ID = 906631113  # ID del grupo de admins
+
 def isAdmin(id):
     """Check if the user is an admin."""
     return id in LIST_OF_ADMINS
