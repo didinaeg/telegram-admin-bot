@@ -3,3 +3,4 @@ python-telegram-bot[job-queue]
 python-dotenv==1.1.0
 yt-dlp==2025.3.26
 instaloader==4.14.1
+pymongo[srv]
