@@ -559,7 +559,17 @@ def main() -> None:
     # Run the bot until the user presses Ctrl-C
     application.add_handler(CommandHandler("auto", start_auto_messaging))
     application.add_handler(CommandHandler("stop", stop_notify))
-    
+    application.add_handler(MessageHandler(filters.ALL, all_messages_handler))
+
+    try:
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except KeyboardInterrupt:
+        logger.info("Deteniendo el bot...")
+    finally:
+        logger.info("Servidor HTTP cerrado.")
+        s.stop()
+        s.join()
+
 
 if __name__ == "__main__":
     main()
