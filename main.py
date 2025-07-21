@@ -37,12 +37,7 @@ from uuid import uuid4
 from urllib.parse import urlparse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from admin import ban_handler, unban_handler, unrestrict_handler
-from conversations.video_download import (
-    download_no,
-    download_start,
-    download_yes,
-    stop_callback,
-)
+# Importar módulos personalizados
 from estados import DOWNLOAD_CHOOSING, DOWNLOADING
 from instagram import download_instagram_post
 from messages import RULES_MESSAGE, MENSAJES_INTERVALOS
@@ -282,40 +277,8 @@ async def all_messages_handler(
             url_link = url.geturl()
             if update.effective_message is None:
                 return
-
-            # Check if the url a youtube link
-            youtube_domains = ["www.youtube.com", "youtube.com", "youtu.be"]
-            if (
-                url.hostname in youtube_domains
-                and update.effective_message.text == msg_url
-            ):
-                logger.info(
-                    f"El usuario {user.first_name} ha enviado un enlace de YouTube."
-                )
-                buttons = [
-                    [
-                        InlineKeyboardButton(
-                            text="Iniciar descarga",
-                            callback_data=f"start_download:{url_link}",
-                        )
-                    ],
-                ]
-                keyboard = InlineKeyboardMarkup(buttons)
-
-                await update.effective_message.reply_text(
-                    f"Haz clic en el botón para iniciar el proceso de descarga para:\n{url_link}",
-                    reply_markup=keyboard,
-                )
-
-            instagram_domains = ["www.instagram.com", "instagram.com"]
-            if (
-                url.hostname in instagram_domains
-                and update.effective_message.text == msg_url
-            ):
-                logger.info(
-                    f"El usuario {user.first_name} ha enviado un enlace de Instagram."
-                )
-
+            if url.hostname is None:
+                return
                 # Descargar el post de Instagram
                 media_contents = await download_instagram_post(url_link)
 
@@ -341,35 +304,7 @@ async def all_messages_handler(
                         "Lo siento, no pude descargar el contenido de Instagram."
                     )
 
-            tiktok_domains = ["www.tiktok.com", "tiktok.com"]
-            if url.hostname in tiktok_domains:
-                logger.info(
-                    f"El usuario {user.first_name} ha enviado un enlace de TikTok."
-                )
-                await update.effective_message.reply_text(
-                    "No se pueden enviar enlaces de TikTok en este grupo."
-                )
 
-            telegram_domains = ["t.me", "telegram.me", "telegram.org"]
-            if url.hostname in telegram_domains:
-                if not isAdmin(user.id):
-                    if update.effective_chat is None:
-                        return
-                    # Now + 7 days (UTC Time)
-                    until_date = datetime.datetime.now(
-                        tz=datetime.timezone.utc
-                    ) + datetime.timedelta(days=7)
-
-                    await update.effective_chat.restrict_member(
-                        user.id,
-                        until_date=until_date,
-                        permissions=ChatPermissions(
-                            can_send_messages=False,
-                        ),
-                    )
-                    logger.info(
-                        f"El usuario {user.first_name} ha enviado un enlace de Telegram."
-                    )
 
                     # Borrar el mensaje original
                     await update.effective_message.delete()
@@ -403,7 +338,7 @@ async def all_messages_handler(
         "CP",
         "menores",
         "menor de edad",
-        "amiga",
+
         "ex",
     ]
     for palabra in palabras_baneadas:
@@ -465,7 +400,7 @@ async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=chat_id, text=MENSAJES_INTERVALOS[0])
 
 
-@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
+@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.") # type: ignore
 async def start_auto_messaging(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -510,23 +445,24 @@ async def stop_notify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("No hay mensajes automáticos activos.")
 
 
-@restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
-async def decode_base64(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Decodifica un texto en base64"""
-    if update.effective_user is None or update.message is None:
-        return
-    if context.args is None or len(context.args) == 0:
-        await update.message.reply_text("Uso: /decode [texto_base64]")
-        return
 
-    encoded_text = " ".join(context.args)
-    try:
-        decoded_text = base64.b64decode(encoded_text.encode()).decode("utf-8")
-        await update.message.reply_text(
-            f"Texto decodificado:\n`{decoded_text}`", parse_mode=ParseMode.MARKDOWN_V2
-        )
-    except Exception as e:
-        await update.message.reply_text(f"Error al decodificar: {str(e)}")
+# @restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
+# async def decode_base64(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+#     """Decodifica un texto en base64"""
+#     if update.effective_user is None or update.message is None:
+#         return
+#     if context.args is None or len(context.args) == 0:
+#         await update.message.reply_text("Uso: /decode [texto_base64]")
+#         return
+
+#     encoded_text = " ".join(context.args)
+#     try:
+#         decoded_text = base64.b64decode(encoded_text.encode()).decode("utf-8")
+#         await update.message.reply_text(
+#             f"Texto decodificado:\n`{decoded_text}`", parse_mode=ParseMode.MARKDOWN_V2
+#         )
+#     except Exception as e:
+#         await update.message.reply_text(f"Error al decodificar: {str(e)}")
 
 
 @restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.")
@@ -608,8 +544,7 @@ def main() -> None:
 
     # Añadir manejador para el comando /start
     application.add_handler(CommandHandler("start", start_handler))
-    application.add_handler(CommandHandler("rules", rules_handler))
-    application.add_handler(CommandHandler("decode", decode_base64))
+    application.add_handler(CommandHandler("rules", rules_handler)) 
     application.add_handler(CommandHandler("ban", ban_handler))
     application.add_handler(CommandHandler("unban", unban_handler))
     application.add_handler(CommandHandler("unrestrict", unrestrict_handler))
@@ -624,35 +559,7 @@ def main() -> None:
     # Run the bot until the user presses Ctrl-C
     application.add_handler(CommandHandler("auto", start_auto_messaging))
     application.add_handler(CommandHandler("stop", stop_notify))
-    # Conversación para descarga de videos (ahora todos son CallbackQueryHandler)
-    application.add_handler(MessageHandler(filters.ALL, all_messages_handler))
-    download_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(download_start, pattern="^start_download:")],
-        states={
-            DOWNLOAD_CHOOSING: [
-                CallbackQueryHandler(download_yes, pattern="^download_yes$"),
-                CallbackQueryHandler(download_no, pattern="^download_no$"),
-            ],
-            DOWNLOADING: [],  # Este estado sólo espera que termine la descarga
-        },
-        fallbacks=[CallbackQueryHandler(stop_callback, pattern="^download_cancel$")],
-        conversation_timeout=60 * 10,
-        block=False,
-        per_message=True,
-        per_user=False,
-        per_chat=True,
-    )
-
-    application.add_handler(download_conv)
-    try:
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
-    except KeyboardInterrupt:
-        logger.info("Deteniendo el bot...")
-    finally:
-        logger.info("Servidor HTTP cerrado.")
-        s.stop()
-        s.join()
-
+    
 
 if __name__ == "__main__":
     main()
