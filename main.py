@@ -92,9 +92,10 @@ async def start_handler(update: Update, context: CallbackContext) -> None:
 
     logger.info(f"El usuario {user.first_name} ha iniciado una conversación.")
     message = (
-        f"Hola, [{user.first_name}](tg://user?id={user.id}) soy Manolito,\n"
-        "estoy aquí para ayudarte con la gestión de tu bar\n"
-        "¿qué necitas\?"  # type: ignore
+        f"Hola, [{user.first_name}](tg://user?id={user.id}) soy Adolf,\n"
+        "estoy aquí para ayudarte\n"
+        "¿qué necitas\?\n" # type: ignore
+        "manda fotopies"  
     )
     await update.message.reply_text(message, parse_mode="MarkdownV2")
 
