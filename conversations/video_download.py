@@ -47,8 +47,11 @@ async def download_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 pass
     # Guardar URL en contexto
     if not context.user_data:
-        context.user_data = {}
-    context.user_data['download_url'] = url
+        try:
+            context.user_data = {}
+        except Exception as e:
+            logger.error(f"Error initializing user_data: {e}")
+    context.user_data['download_url'] = url # type: ignore
     
     # Inicializar o actualizar el registro de descargas para este usuario
     active_downloads[user_id] = {
