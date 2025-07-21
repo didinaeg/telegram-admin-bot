@@ -272,11 +272,11 @@ async def download_video(context: ContextTypes.DEFAULT_TYPE, url: str, message: 
     except DownloadError as e:
         if user_id in active_downloads and active_downloads[user_id]['active']:
             logger.error(f"Error al descargar el video: {str(e)}")
-            await message.edit_text(f"Error al descargar el video: {str(e)}")
+            await message.edit_text(f"Error al descargar el video")
             active_downloads[user_id]['active'] = False
     except Exception as e:
         traceback.print_exc()
         if user_id in active_downloads and active_downloads[user_id]['active']:
             logger.error(f"Error durante la descarga: {str(e)}")
-            await message.edit_text(f"Error durante la descarga: {str(e)}")
+            await message.edit_text(f"Error durante la descarga")
             active_downloads[user_id]['active'] = False
