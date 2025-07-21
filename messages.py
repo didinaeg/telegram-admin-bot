@@ -1,7 +1,6 @@
 #type: ignore
 
-RULES_MESSAGE = 
-""" No ser rojo """
+RULES_MESSAGE = """ No ser rojo """
 
 MENSAJES_INTERVALOS =[
     "¡Perro Sanxe dimisión!",
