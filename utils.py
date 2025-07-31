@@ -9,7 +9,7 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
-LIST_OF_ADMINS = [906631113, 6781918338, ]
+LIST_OF_ADMINS = [906631113, 6781918338, 7565166013,  ]
 
 ADMIN_CHAT_ID = 906631113  # ID del grupo de admins
 

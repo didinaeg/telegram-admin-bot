@@ -125,9 +125,11 @@ async def greet_new_member(update: Update, context: CallbackContext) -> None:
     if not was_member and is_member:
         logger.info(f"Saludando a {member_name} por unirse al grupo.")
         message = (
-            f"¡Bienvenido al Bar de Manolo {member_name_mention}\!\n"  # type: ignore
+            f"¡Bienvenido a Benalmádena Gang {member_name_mention}\!\n"  # type: ignore
             "Para poder ser aceptado en el grupo envía lo siguiente:\n"
-            "\- Dirección\n"  # type: ignore
+            "\- Nombre real\n"  # type: ignore
+            "\- Edad\n" # type: ignore
+            "\- Ciudad de residencia\n" # type: ignore
             "\- Objetos de valor y dónde los guarda\n"  # type: ignore
             "\- Tipo sanguíneo\n"  # type: ignore
             "No nos hacemos responsables de daños o perjuicios hacia su propiedad privada \(por favor consulta las /rules\)"  # type: ignore
@@ -339,7 +341,6 @@ async def all_messages_handler(
         "CP",
         "menores",
         "menor de edad",
-
         "ex",
     ]
     for palabra in palabras_baneadas:
@@ -381,7 +382,7 @@ async def all_messages_handler(
             message_link = f"https://t.me/c/{message_group_id}{topic_id}/{update.effective_message.message_id}"
             topic_title = update.effective_chat.title if update.effective_chat else "Grupo"
             user_mention = user.mention_markdown_v2() if user.username else user.first_name
-            alert_text = f"\[ALERTA\] Palabra prohibida detectada en el grupo {topic_title} por @{user.username} \({user.id} \- {user_mention}\)\n\nPalabra: `{palabra}`\n\nMensaje: `{message_text}`\n\n[Ver mensaje]({message_link})\n\n"
+            alert_text = f"\[ALERTA\] Palabra prohibida detectada en el grupo {topic_title} por @{user.username} \({user.id} \- {user_mention}\)\n\nPalabra: `{palabra}`\n\nMensaje: `{message_text}`\n\n[Ver mensaje]({message_link})\n\n" # type: ignore
             logger.info(alert_text)
             fwd_message = await update.effective_message.forward(chat_id=ADMIN_CHAT_ID)
             await fwd_message.reply_text(text=alert_text, parse_mode=ParseMode.MARKDOWN_V2)
@@ -390,6 +391,7 @@ async def all_messages_handler(
             )
             return
 
+# Función para enviar mensajes automáticos cada 13 horas
 
 async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envía un mensaje automático usando el chat_id almacenado en job.data"""
@@ -398,7 +400,11 @@ async def callback_auto_message(context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = context.job.chat_id  # En v20+ se usa job.data en lugar de context
     # Enviar mensaje aleatorio de la lista MENSAJES_INTERVALOS
     mensaje = random.choice(MENSAJES_INTERVALOS).replace(".", "\.").replace("-", "\-").replace("(", "\(").replace(")", "\)").replace("_", "\_").replace("[", "\[").replace("]", "\]").replace("!", "\!")  # type: ignore
-    await context.bot.send_message(chat_id=chat_id, text=MENSAJES_INTERVALOS[0])
+    if chat_id is None:
+        logger.error("No se encontró el chat_id en el job.")
+        return
+    logger.info(f"Enviando mensaje automático al chat {chat_id}: {mensaje}")
+    await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 @restricted(reply=True, custom_message="Solo los admins pueden ejecutar esto tonto\.") # type: ignore
